@@ -1,4 +1,4 @@
-module Dungeon where
+module Veterator.Model.Dungeon where
 
 import Data.Foldable (find)
 import Data.UUID (UUID)
@@ -10,18 +10,13 @@ import Math.Geometry.Grid.Octagonal (RectOctGrid)
 import Math.Geometry.GridMap (GridMap (toList), (!))
 import qualified Math.Geometry.GridMap as GM
 import Math.Geometry.GridMap.Lazy (LGridMap)
+import Veterator.Model.Creature (Creature, Item)
 
 data Tile = Floor | Wall | StairUp | StairDown deriving (Eq)
-
-data Monster = Goblin
-
-data Creature = Adventurer | Monster Monster
 
 type DungeonGrid = LGridMap RectOctGrid Tile
 
 type CreatureGrid = LGridMap RectOctGrid (UUID, Creature)
-
-data Item = Gold Int | Rock
 
 type ItemsGrid = LGridMap RectOctGrid [Item]
 
@@ -44,6 +39,9 @@ isEmpty g i = (g ! i) == Floor
 
 inBounds :: DungeonGrid -> DungeonPosition -> Bool
 inBounds = contains
+
+getCreatureAt :: DungeonPosition -> CreatureGrid -> Maybe (UUID, Creature)
+getCreatureAt = GM.lookup
 
 getCreatureWithPosition :: CreatureGrid -> UUID -> Maybe (DungeonPosition, (UUID, Creature))
 getCreatureWithPosition g uuid = find ((== uuid) . fst . snd) (toList g)

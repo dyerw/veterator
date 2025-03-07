@@ -1,12 +1,15 @@
+{-# LANGUAGE NamedFieldPuns #-}
+
 module Veterator.Views where
 
 import Data.Extra.List (chunk)
 import Display.View (View (..), empty, gridLayout, sparseGridLayout)
-import Dungeon (Creature (..), Monster (..), Tile (..))
 import GameState (GameState (..))
 import Math.Geometry.Grid (FiniteGrid (size))
 import Math.Geometry.GridMap (GridMap (..))
 import Resources (ImageKey (..))
+import Veterator.Model.Creature (Creature (..), CreatureType (..))
+import Veterator.Model.Dungeon (Tile (..))
 
 rootView :: GameState -> View
 rootView state =
@@ -21,10 +24,9 @@ rootView state =
         ]
 
 creatureView :: Creature -> View
-creatureView c = case c of
+creatureView Creature {creatureType} = case creatureType of
   Adventurer -> Sprite PlayerImage
-  Monster m -> case m of
-    Goblin -> Sprite GoblinImage
+  Goblin -> Sprite GoblinImage
 
 tileView :: Tile -> View
 tileView tile =

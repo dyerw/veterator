@@ -5,25 +5,27 @@
 module GameState where
 
 import Data.Extra.Maybe (replace)
-import Data.Maybe (fromMaybe)
+import Data.Function ((&))
+import Data.Maybe (fromJust, fromMaybe, isJust)
 import Data.UUID (UUID)
-import Dungeon
-  ( CreatureGrid,
-    DungeonGrid,
-    DungeonPosition,
-    fromPoint,
-    getCreaturePosition,
-    inBounds,
-    isEmpty,
-    moveCreature,
-    toPoint,
-  )
 import Gen.Dungeon
   ( DungeonGeneration (DungeonGeneration, generationCreatures, generationPlayerUUID, generationTiles),
   )
 import Linear.Affine (Affine ((.+^)))
 import Linear.V2 (V2 (V2))
 import System.Random (StdGen)
+import Veterator.Model.Dungeon
+  ( CreatureGrid,
+    DungeonGrid,
+    DungeonPosition,
+    fromPoint,
+    getCreatureAt,
+    getCreaturePosition,
+    inBounds,
+    isEmpty,
+    moveCreature,
+    toPoint,
+  )
 
 data Dir = N | NE | E | SE | S | SW | W | NW
 
@@ -53,20 +55,33 @@ playerPos state =
       (stateCreatureGrid state)
       (statePlayerUUID state)
 
-data Command = Move Dir
+data Command = Move Dir | Attack UUID
 
-data MoveResult = Vacant | Blocked | OutOfBounds | Enemy
+data MoveResult = Vacant | Blocked | OutOfBounds | Enemy UUID
+
+getMoveResult :: GameState -> DungeonPosition -> MoveResult
+getMoveResult state moveTo
+  | not (inBounds dungeonGrid moveTo) = OutOfBounds
+  | isJust creatureAtPos = Enemy (creatureAtPos & fromJust & fst)
+  | not (isEmpty dungeonGrid moveTo) = Blocked
+  | otherwise = Vacant
+  where
+    dungeonGrid = stateDungeonGrid state
+    creatureGrid = stateCreatureGrid state
+    creatureAtPos = getCreatureAt moveTo creatureGrid
 
 applyCommand :: Command -> GameState -> GameState
 applyCommand (Move d) state =
   let moveTo = move d (playerPos state)
-      dungeonGrid = stateDungeonGrid state
-   in if isEmpty dungeonGrid moveTo && inBounds dungeonGrid moveTo
-        then
+      moveResult = getMoveResult state moveTo
+   in case moveResult of
+        Vacant ->
           state
             { stateCreatureGrid = replace (moveCreature (statePlayerUUID state) moveTo) (stateCreatureGrid state)
             }
-        else state
+        Enemy id -> applyCommand (Attack id) state
+        _ -> state
+applyCommand (Attack enemyId) state = undefined
 
 initialGameState :: StdGen -> DungeonGeneration -> GameState
 initialGameState rng' DungeonGeneration {generationTiles, generationCreatures, generationPlayerUUID} =

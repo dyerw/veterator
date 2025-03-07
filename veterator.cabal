@@ -27,12 +27,13 @@ executable veterator
         Time,
         Game,
         GameState,
-        Dungeon,
         Gen.Dungeon,
         Resources,
         Data.Extra.List,
         Data.Extra.Maybe,
         Math.Geometry.Extra.GridMap,
+        Veterator.Model.Dungeon,
+        Veterator.Model.Creature,
         Veterator.Views
 
 

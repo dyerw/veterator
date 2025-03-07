@@ -6,12 +6,13 @@ import Control.Monad.Random.Lazy (MonadRandom (..), Rand)
 import Data.Extra.List (count, shuffle)
 import Data.Function ((&))
 import Data.UUID (UUID)
-import Dungeon (Creature (Adventurer, Monster), CreatureGrid, DungeonGrid, Monster (Goblin), Tile (..), emptyTiles)
 import Math.Geometry.Grid (Grid (neighbours))
 import Math.Geometry.Grid.Octagonal (rectOctGrid)
 import Math.Geometry.GridMap (GridMap (insert, mapWithKey, toGrid, (!)))
 import Math.Geometry.GridMap.Lazy (lazyGridMap, lazyGridMapIndexed)
 import System.Random (RandomGen)
+import Veterator.Model.Creature (Creature (..), CreatureStats (..), CreatureType (..))
+import Veterator.Model.Dungeon (CreatureGrid, DungeonGrid, Tile (..), emptyTiles)
 
 data DungeonGeneration = DungeonGeneration
   { generationTiles :: DungeonGrid,
@@ -63,17 +64,17 @@ generateCreatures grid = do
   numMonsters <- min (validSpawns - 1) <$> getRandomR (10 :: Int, 20 :: Int)
   uuids <- genUUIDs
   let playerUUID = head uuids
+  let goblin = Creature Goblin 10 (CreatureStats 10 1 3) []
   pure
     ( lazyGridMapIndexed
         (toGrid grid)
         ( uuids
             & tail -- leave the first for the player
-            & fmap (,Monster Goblin)
+            & fmap (,goblin)
             & zip spawnPositions
             & take numMonsters
         )
-        -- & insert (last spawnPositions) (playerUUID, Adventurer),
-        & insert (10, 10) (playerUUID, Adventurer),
+        & insert (last spawnPositions) (playerUUID, Creature Adventurer 20 (CreatureStats 20 2 8) []),
       playerUUID
     )
 

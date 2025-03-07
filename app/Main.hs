@@ -4,16 +4,22 @@ module Main where
 
 import qualified Display
 import qualified FRP.Yampa as Yampa
-import Game (GameInput (GameInput), GameOutput (GameOutput, gameOutputCamera, gameOutputView), entireGame)
+import Game
+  ( GameInput (GameInput),
+    GameOutput (GameOutput, gameOutputCamera, gameOutputView),
+    entireGame,
+  )
 import qualified Input
 import Linear (V2)
 import qualified Resources
 import qualified SDL
+import qualified SDL.Font as Font
 import System.Random (initStdGen)
 import qualified Time
 
 main :: IO ()
 main = do
+  Font.initialize
   (window, renderer) <- Display.initialize
   resources <- Resources.loadResources renderer
 

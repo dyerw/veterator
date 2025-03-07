@@ -32,7 +32,7 @@ render res renderer camera view = do
   SDL.present renderer
 
 renderPrimitive :: Resources -> SDL.Renderer -> Camera -> (Px, Primitive) -> IO ()
-renderPrimitive res renderer Camera {cameraScale, cameraTranslation} (worldPos, prim) = case prim of
+renderPrimitive res renderer Camera {cameraTranslation} (worldPos, prim) = case prim of
   SpritePrim imgKey -> do
     let texture = imageTexture (getImage imgKey res)
     let (V2 x y) = worldPos + cameraTranslation

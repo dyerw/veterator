@@ -4,23 +4,27 @@
 -- and logic, ignoring presentational elements like sound and animations
 module GameState where
 
-import Data.Extra.Maybe (replace)
-import Data.Function ((&))
 import Data.Maybe (fromJust, fromMaybe, isJust)
 import Data.UUID (UUID)
 import Gen.Dungeon
-  ( DungeonGeneration (DungeonGeneration, generationCreatures, generationPlayerUUID, generationTiles),
+  ( DungeonGeneration
+      ( DungeonGeneration,
+        generationCreatures,
+        generationItems,
+        generationPlayerUUID,
+        generationTiles
+      ),
   )
 import Linear.Affine (Affine ((.+^)))
 import Linear.V2 (V2 (V2))
-import System.Random (StdGen)
+import System.Random (StdGen, uniformR)
+import Veterator.Model.Creature (Creature (..), CreatureStats (statsDamageRange))
 import Veterator.Model.Dungeon
-  ( CreatureGrid,
-    DungeonGrid,
+  ( Dungeon (..),
     DungeonPosition,
     fromPoint,
     getCreatureAt,
-    getCreaturePosition,
+    getCreatureWithPosition,
     inBounds,
     isEmpty,
     moveCreature,
@@ -40,55 +44,71 @@ move W pos = fromPoint $ toPoint pos .+^ V2 (-1) 0
 move NW pos = fromPoint $ toPoint pos .+^ V2 (-1) (-1)
 
 data GameState = GameState
-  { stateDungeonGrid :: DungeonGrid,
-    stateCreatureGrid :: CreatureGrid,
+  { stateDungeon :: Dungeon,
     statePlayerUUID :: UUID,
     -- items :: [(DungeonPosition, Item)],
     rng :: StdGen
   }
 
-playerPos :: GameState -> DungeonPosition
-playerPos state =
-  -- Crash if player doesn't exist in creature grid
+getPlayerWithPosition :: GameState -> (DungeonPosition, Creature)
+getPlayerWithPosition state =
   fromMaybe (error "FATAL: Player UUID does not exist in creature grid") $
-    getCreaturePosition
-      (stateCreatureGrid state)
+    getCreatureWithPosition
+      (stateDungeon state)
       (statePlayerUUID state)
 
-data Command = Move Dir | Attack UUID
+getPlayerPosition :: GameState -> DungeonPosition
+getPlayerPosition = fst . getPlayerWithPosition
 
-data MoveResult = Vacant | Blocked | OutOfBounds | Enemy UUID
+getPlayer :: GameState -> Creature
+getPlayer = snd . getPlayerWithPosition
+
+data Command = Move Dir | Attack Creature
+
+data MoveResult = Vacant | Blocked | OutOfBounds | Enemy Creature
 
 getMoveResult :: GameState -> DungeonPosition -> MoveResult
-getMoveResult state moveTo
-  | not (inBounds dungeonGrid moveTo) = OutOfBounds
-  | isJust creatureAtPos = Enemy (creatureAtPos & fromJust & fst)
-  | not (isEmpty dungeonGrid moveTo) = Blocked
+getMoveResult state destination
+  | not (inBounds dungeon destination) = OutOfBounds
+  | isJust creatureAtPos = Enemy (fromJust creatureAtPos)
+  | not (isEmpty dungeon destination) = Blocked
   | otherwise = Vacant
   where
-    dungeonGrid = stateDungeonGrid state
-    creatureGrid = stateCreatureGrid state
-    creatureAtPos = getCreatureAt moveTo creatureGrid
+    dungeon = stateDungeon state
+    creatureAtPos = getCreatureAt dungeon destination
 
 applyCommand :: Command -> GameState -> GameState
 applyCommand (Move d) state =
-  let moveTo = move d (playerPos state)
-      moveResult = getMoveResult state moveTo
-   in case moveResult of
-        Vacant ->
-          state
-            { stateCreatureGrid = replace (moveCreature (statePlayerUUID state) moveTo) (stateCreatureGrid state)
-            }
-        Enemy id -> applyCommand (Attack id) state
-        _ -> state
-applyCommand (Attack enemyId) state = undefined
+  case getMoveResult state destination of
+    Vacant ->
+      state
+        { stateDungeon = moveCreature (stateDungeon state) (statePlayerUUID state) destination
+        }
+    Enemy enemyId -> applyCommand (Attack enemyId) state
+    _ -> state
+  where
+    destination = move d (getPlayerPosition state)
+applyCommand (Attack enemyCreature) state = undefined
+  where
+    playerStats = creatureStats (getPlayer state)
+    (damage, nextRng) = uniformR (statsDamageRange playerStats) (rng state)
 
 initialGameState :: StdGen -> DungeonGeneration -> GameState
-initialGameState rng' DungeonGeneration {generationTiles, generationCreatures, generationPlayerUUID} =
-  GameState
-    { stateDungeonGrid = generationTiles,
-      stateCreatureGrid = generationCreatures,
-      statePlayerUUID = generationPlayerUUID,
-      -- items = [],
-      rng = rng'
-    }
+initialGameState
+  rng'
+  DungeonGeneration
+    { generationTiles,
+      generationCreatures,
+      generationPlayerUUID,
+      generationItems
+    } =
+    GameState
+      { stateDungeon =
+          Dungeon
+            { dungeonTiles = generationTiles,
+              dungeonCreatures = generationCreatures,
+              dungeonItems = generationItems
+            },
+        statePlayerUUID = generationPlayerUUID,
+        rng = rng'
+      }

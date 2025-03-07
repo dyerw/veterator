@@ -7,7 +7,7 @@ import Control.Monad.Random (evalRand)
 import Display (Camera (Camera))
 import Display.View (View, px)
 import FRP.Yampa (Event (..), SF, edge, mergeEvents, sscan, tagWith)
-import GameState (Command (Move), Dir (..), GameState (..), applyCommand, initialGameState, playerPos)
+import GameState (Command (Move), Dir (..), GameState (..), applyCommand, getPlayerPosition, initialGameState)
 import Gen.Dungeon (generateDungeon)
 import Input (Controller (..))
 import Linear (V2)
@@ -63,7 +63,7 @@ followsPlayer =
   arr
     ( \(state, windowSize) ->
         -- FIXME: Get a handle on coordinate transformations
-        let playerTilePos = playerPos state
+        let playerTilePos = getPlayerPosition state
             playerPxPos = (* (-16)) <$> uncurry px playerTilePos
             halfWindowOffset = ((`div` 2) <$> windowSize)
          in Camera (playerPxPos + halfWindowOffset) 1

@@ -12,8 +12,11 @@ import Resources (ImageKey (..))
 import Veterator.Model.Creature (Creature (..), CreatureType (..))
 import Veterator.Model.Dungeon (Dungeon (..), Tile (..))
 
-rootView :: GameState -> View
-rootView state =
+uiView :: GameState -> View
+uiView _ = Label "hello world"
+
+worldView :: GameState -> View
+worldView state =
   let dungeon = stateDungeon state
       tiles = dungeonTiles dungeon
       creatures = toList (dungeonCreatures dungeon)

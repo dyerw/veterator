@@ -6,7 +6,7 @@ import qualified Display
 import qualified FRP.Yampa as Yampa
 import Game
   ( GameInput (GameInput),
-    GameOutput (GameOutput, gameOutputCamera, gameOutputView),
+    GameOutput (GameOutput, gameOutputAbsoluteView),
     entireGame,
   )
 import qualified Input
@@ -42,8 +42,8 @@ main = do
         pure (dtSecs, Just $ GameInput controller windowSize)
     )
     -- Output processing
-    ( \_ GameOutput {gameOutputCamera, gameOutputView} -> do
-        Display.render resources renderer gameOutputCamera gameOutputView
+    ( \_ GameOutput {gameOutputAbsoluteView} -> do
+        Display.render resources renderer gameOutputAbsoluteView
         -- Always continue
         return False
     )

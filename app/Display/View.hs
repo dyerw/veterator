@@ -1,27 +1,49 @@
+{-# LANGUAGE NamedFieldPuns #-}
+
 -- | Declarative descriptions of game visuals
 module Display.View where
 
+import Data.Text (Text)
 import Linear.V2 (V2 (V2))
 import Resources (ImageKey)
 
 type Px = V2 Int
 
-data View = Group [View] | Translate Px View | Sprite ImageKey deriving (Show)
+data View
+  = Group [View]
+  | Translate Px View
+  | Sprite ImageKey
+  | Label Text
+  deriving (Show)
 
-newtype Primitive = SpritePrim ImageKey
+data Primitive = SpritePrim ImageKey | TextPrim Text
 
 -- An AbsoluteView is an ordered list of primitives paired with their
 -- position in terms of world space
 type AbsoluteView = [(Px, Primitive)]
 
-layout :: View -> AbsoluteView
-layout = layout' (px 0 0) []
+layout :: View -> Camera -> AbsoluteView
+layout v Camera {cameraTranslation} = layout' cameraTranslation [] v
   where
     layout' :: Px -> AbsoluteView -> View -> AbsoluteView
-    layout' offset acc view = case view of
+    layout' offset acc v' = case v' of
       Group vs -> (layout' offset [] =<< vs) <> acc
-      Translate translate v -> layout' (offset + translate) acc v
+      Translate translate v'' -> layout' (offset + translate) acc v''
       Sprite imgKey -> (offset, SpritePrim imgKey) : acc
+      Label t -> (offset, TextPrim t) : acc
+
+data Camera = Camera
+  { cameraTranslation :: Px,
+    cameraScale :: Float
+  }
+  deriving (Show)
+
+type GameView = View
+
+type UIView = View
+
+layoutScreen :: GameView -> UIView -> Camera -> AbsoluteView
+layoutScreen gv uiv cam = layout gv cam <> layout uiv (Camera (px 0 0) 0)
 
 px :: Int -> Int -> Px
 px = V2

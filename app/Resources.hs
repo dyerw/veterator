@@ -28,7 +28,7 @@ loadResources renderer = do
   floorTexture <- loadTexture renderer "data/images/floor.png"
   wallTexture <- loadTexture renderer "data/images/wall.png"
   goblinTexture <- loadTexture renderer "data/images/goblin.png"
-  cozetteFont' <- Font.load "data/fonts/CozetteVector.ttf" 13
+  cozetteFont' <- Font.load "data/fonts/CozetteVector.ttf" 16
   pure $
     Resources
       { playerImage = Image playerTexture,

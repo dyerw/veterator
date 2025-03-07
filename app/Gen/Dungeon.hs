@@ -72,7 +72,8 @@ generateCreatures grid = do
             & zip spawnPositions
             & take numMonsters
         )
-        & insert (last spawnPositions) (playerUUID, Adventurer),
+        -- & insert (last spawnPositions) (playerUUID, Adventurer),
+        & insert (10, 10) (playerUUID, Adventurer),
       playerUUID
     )
 

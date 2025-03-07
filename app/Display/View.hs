@@ -6,12 +6,12 @@ import Resources (ImageKey)
 
 type Px = V2 Int
 
-data View = Group [View] | Translate Px View | Sprite ImageKey
+data View = Group [View] | Translate Px View | Sprite ImageKey deriving (Show)
 
 newtype Primitive = SpritePrim ImageKey
 
 -- An AbsoluteView is an ordered list of primitives paired with their
--- position in terms of screen space
+-- position in terms of world space
 type AbsoluteView = [(Px, Primitive)]
 
 layout :: View -> AbsoluteView

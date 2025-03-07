@@ -3,7 +3,12 @@ module Resources where
 import qualified SDL
 import SDL.Image (loadTexture)
 
-data ImageKey = PlayerImage | WallTileImage | FloorTileImage | GoblinImage
+data ImageKey
+  = PlayerImage
+  | WallTileImage
+  | FloorTileImage
+  | GoblinImage
+  deriving (Show)
 
 data Resources = Resources
   { playerImage :: Image,

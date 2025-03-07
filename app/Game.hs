@@ -4,16 +4,35 @@ module Game where
 
 import Control.Arrow (Arrow (arr), returnA, (>>>))
 import Control.Monad.Random (evalRand)
-import Display.View (View)
+import Display (Camera (Camera))
+import Display.View (View, px)
 import FRP.Yampa (Event (..), SF, edge, mergeEvents, sscan, tagWith)
-import GameState (Command (Move), Dir (..), GameState (..), applyCommand, initialGameState)
+import GameState (Command (Move), Dir (..), GameState (..), applyCommand, initialGameState, playerPos)
 import Gen.Dungeon (generateDungeon)
 import Input (Controller (..))
+import Linear (V2)
 import System.Random (StdGen)
 import Veterator.Views (rootView)
 
-entireGame :: StdGen -> SF Controller View
-entireGame seed = commands >>> updatesState seed >>> views
+type WindowSize = V2 Int
+
+data GameInput = GameInput
+  { gameInputController :: Controller,
+    gameInputWindowSize :: WindowSize
+  }
+
+data GameOutput = GameOutput
+  { gameOutputCamera :: Camera,
+    gameOutputView :: View
+  }
+
+entireGame :: StdGen -> SF GameInput GameOutput
+entireGame seed = proc gi -> do
+  command <- commands -< (gameInputController gi)
+  state <- (updatesState seed) -< command
+  view <- views -< state
+  camera <- followsPlayer -< (state, gameInputWindowSize gi)
+  returnA -< GameOutput camera view
 
 updatesState :: StdGen -> SF (Event Command) GameState
 updatesState seed = sscan updateState (initialGameState seed dungeonGen)
@@ -38,3 +57,14 @@ commands = proc controller -> do
 
 views :: SF GameState View
 views = arr rootView
+
+followsPlayer :: SF (GameState, WindowSize) Camera
+followsPlayer =
+  arr
+    ( \(state, windowSize) ->
+        -- FIXME: Get a handle on coordinate transformations
+        let playerTilePos = playerPos state
+            playerPxPos = (* (-16)) <$> uncurry px playerTilePos
+            halfWindowOffset = ((`div` 2) <$> windowSize)
+         in Camera (playerPxPos + halfWindowOffset) 1
+    )

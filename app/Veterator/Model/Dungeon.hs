@@ -13,7 +13,7 @@ import Math.Geometry.Grid.Octagonal (RectOctGrid)
 import Math.Geometry.GridMap (GridMap (toList), (!))
 import qualified Math.Geometry.GridMap as GM
 import Math.Geometry.GridMap.Lazy (LGridMap)
-import Veterator.Model.Creature (Creature (creatureId), Item)
+import Veterator.Model.Creature (Creature (creatureId), Item, isAlive)
 
 data Dungeon = Dungeon
   { dungeonTiles :: Tiles,
@@ -87,3 +87,10 @@ moveCreature d uuid destination =
       Just _ -> d
       Nothing -> d {dungeonCreatures = swap destination origin (dungeonCreatures d)}
     Nothing -> d
+
+-- FIXME: Ok now we're really asking for a State monad
+removeDeadCreatures :: Dungeon -> ([Creature], Dungeon)
+removeDeadCreatures dungeon =
+  let creatures = dungeonCreatures dungeon
+      nextCreatures = GM.filter isAlive creatures
+   in (filter (not . isAlive) (GM.elems creatures), dungeon {dungeonCreatures = nextCreatures})

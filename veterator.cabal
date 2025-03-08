@@ -37,7 +37,8 @@ executable veterator
         Veterator.Model.Dungeon,
         Veterator.Model.Creature,
         Veterator.Views,
-        Veterator.Events
+        Veterator.Events,
+        Debug.Extra
 
 
     build-depends:    

@@ -7,34 +7,51 @@ import Data.Text (Text)
 import Linear.V2 (V2 (V2))
 import Resources (ImageKey)
 
+-- One day we'll get serious about type-enforcing coordinate spaces, but not today
 type Px = V2 Int
+
+data TextAlignment = LeftAligned | RightAligned | Centered deriving (Show)
+
+data Side = TopSide | BottomSide | LeftSide | RightSide deriving (Show)
 
 data View
   = Group [View]
   | Translate Px View
   | Sprite ImageKey
-  | Label Text
+  | Label TextAlignment Text
+  | -- These are all absolute to the screen and reset the translation context
+    CenterX View
+  | CenterY View
+  | From Side Int View
   deriving (Show)
 
-data Primitive = SpritePrim ImageKey | TextPrim Text
+data Primitive = SpritePrim ImageKey | TextPrim TextAlignment Text deriving (Show)
 
 -- An AbsoluteView is an ordered list of primitives paired with their
 -- position in terms of world space
 type AbsoluteView = [(Px, Primitive)]
 
 layout :: View -> Camera -> AbsoluteView
-layout v Camera {cameraTranslation} = layout' cameraTranslation [] v
+layout view Camera {cameraTranslation, cameraSize = (V2 cameraWidth cameraHeight)} = layout' cameraTranslation [] view
   where
     layout' :: Px -> AbsoluteView -> View -> AbsoluteView
-    layout' offset acc v' = case v' of
+    layout' offset acc view' = case view' of
       Group vs -> (layout' offset [] =<< vs) <> acc
-      Translate translate v'' -> layout' (offset + translate) acc v''
+      Translate translate v -> layout' (offset + translate) acc v
       Sprite imgKey -> (offset, SpritePrim imgKey) : acc
-      Label t -> (offset, TextPrim t) : acc
+      Label a t -> (offset, TextPrim a t) : acc
+      -- These reset the offset of the affected coordinate
+      CenterX v -> layout' (px (div cameraWidth 2) (pxY offset)) acc v
+      CenterY v -> layout' (px (pxX offset) (div cameraHeight 2)) acc v
+      From LeftSide x v -> layout' (px x (pxY offset)) acc v
+      From RightSide x v -> layout' (px (cameraWidth - x) (pxY offset)) acc v
+      From BottomSide y v -> layout' (px (pxX offset) (cameraHeight - y)) acc v
+      From TopSide y v -> layout' (px (pxX offset) y) acc v
 
 data Camera = Camera
   { cameraTranslation :: Px,
-    cameraScale :: Float
+    cameraScale :: Float,
+    cameraSize :: V2 Int
   }
   deriving (Show)
 
@@ -43,10 +60,16 @@ type GameView = View
 type UIView = View
 
 layoutScreen :: GameView -> UIView -> Camera -> AbsoluteView
-layoutScreen gv uiv cam = layout gv cam <> layout uiv (Camera (px 0 0) 0)
+layoutScreen gv uiv cam = layout gv cam <> layout uiv (cam {cameraTranslation = px 0 0, cameraScale = 0})
 
 px :: Int -> Int -> Px
 px = V2
+
+pxX :: Px -> Int
+pxX (V2 x _) = x
+
+pxY :: Px -> Int
+pxY (V2 _ y) = y
 
 empty :: View
 empty = Group []

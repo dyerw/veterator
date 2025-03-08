@@ -4,6 +4,7 @@
 
 -- | GameState is the pure core of the game that implements all game rules
 -- and logic, ignoring presentational elements like sound and animations
+-- it emits events that can be used drive sound/animations
 module GameState where
 
 import Control.Monad.Identity (Identity (runIdentity))
@@ -23,17 +24,19 @@ import Gen.Dungeon
 import Linear.Affine (Affine ((.+^)))
 import Linear.V2 (V2 (V2))
 import System.Random (StdGen)
-import Veterator.Events (GameEvent (CreatureTookDamage))
-import Veterator.Model.Creature (Creature (..), CreatureStats (statsDamageRange), dealDamage)
+import Veterator.Events (GameEvent (CreatureDied, CreatureTookDamage, PlayerGainedXP))
+import Veterator.Model.Creature (Creature (..), CreatureStats (statsDamageRange), dealDamage, isAlive)
 import Veterator.Model.Dungeon
   ( Dungeon (..),
     DungeonPosition,
     fromPoint,
+    getCreature,
     getCreatureAt,
     getCreatureWithPosition,
     inBounds,
     isEmpty,
     moveCreature,
+    removeDeadCreatures,
     toPoint,
     updateCreature,
   )
@@ -52,9 +55,11 @@ move NW pos = fromPoint $ toPoint pos .+^ V2 (-1) (-1)
 
 data GameState = GameState
   { stateDungeon :: Dungeon,
-    statePlayerUUID :: UUID
+    statePlayerUUID :: UUID,
+    statePlayerXP :: Int
   }
 
+-- Maybe we make this StateT GameState too?
 newtype GameM a = GameM (WriterT [GameEvent] (Rand StdGen) a)
   deriving
     ( Functor,
@@ -63,6 +68,12 @@ newtype GameM a = GameM (WriterT [GameEvent] (Rand StdGen) a)
       MonadRandom,
       (MonadWriter [GameEvent])
     )
+
+logEvent :: GameEvent -> GameM ()
+logEvent = tell . pure
+
+logEvents :: [GameEvent] -> GameM ()
+logEvents = tell
 
 runGameM :: GameM a -> (StdGen -> ((a, [GameEvent]), StdGen))
 runGameM (GameM m) = runIdentity . runRandT (runWriterT m)
@@ -94,6 +105,9 @@ getMoveResult state destination
     dungeon = stateDungeon state
     creatureAtPos = getCreatureAt dungeon destination
 
+tick :: Command -> GameState -> GameM GameState
+tick command state = applyCommand command state >>= cleanup
+
 applyCommand :: Command -> GameState -> GameM GameState
 applyCommand (Move d) state =
   case getMoveResult state destination of
@@ -107,20 +121,42 @@ applyCommand (Move d) state =
                 destination
           }
     Enemy enemyId -> applyCommand (Attack enemyId) state
+    -- bonk
     _ -> pure state
   where
     destination = move d (getPlayerPosition state)
 applyCommand (Attack Creature {creatureId}) state = do
   let playerStats = creatureStats (getPlayer state)
   damage <- getRandomR (statsDamageRange playerStats)
-  _ <- tell [CreatureTookDamage creatureId damage]
+  nextState <- damageCreature creatureId damage state
+  let creatureDied = maybe False (not . isAlive) (getCreature (stateDungeon nextState) creatureId)
+  if creatureDied
+    then
+      gainXP 10 nextState
+    else
+      pure nextState
+
+cleanup :: GameState -> GameM GameState
+cleanup state = do
+  let (deadCreatures, nextDungeon) = removeDeadCreatures (stateDungeon state)
+  _ <- logEvents $ CreatureDied <$> deadCreatures
+  pure $ state {stateDungeon = nextDungeon}
+
+gainXP :: Int -> GameState -> GameM GameState
+gainXP amount state = do
+  _ <- logEvent $ PlayerGainedXP amount
+  pure $ state {statePlayerXP = statePlayerXP state + amount}
+
+damageCreature :: UUID -> Int -> GameState -> GameM GameState
+damageCreature creatureId amount state = do
+  _ <- logEvent $ CreatureTookDamage creatureId amount
   pure $
     state
       { stateDungeon =
           updateCreature
             (stateDungeon state)
             creatureId
-            (dealDamage damage)
+            (dealDamage amount)
       }
 
 initialGameState :: DungeonGeneration -> GameState
@@ -138,5 +174,6 @@ initialGameState
               dungeonCreatures = generationCreatures,
               dungeonItems = generationItems
             },
-        statePlayerUUID = generationPlayerUUID
+        statePlayerUUID = generationPlayerUUID,
+        statePlayerXP = 0
       }

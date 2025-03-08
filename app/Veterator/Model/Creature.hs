@@ -1,3 +1,5 @@
+{-# LANGUAGE NamedFieldPuns #-}
+
 module Veterator.Model.Creature where
 
 import Data.UUID (UUID)
@@ -18,6 +20,9 @@ data Creature = Creature
 isHostile :: Creature -> Bool
 isHostile Creature {creatureType = Goblin} = True
 isHostile _ = False
+
+isAlive :: Creature -> Bool
+isAlive Creature {creatureHealth} = creatureHealth > 0
 
 dealDamage :: Int -> Creature -> Creature
 dealDamage i c = c {creatureHealth = creatureHealth c - i}

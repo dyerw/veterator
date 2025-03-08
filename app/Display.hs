@@ -1,7 +1,7 @@
 module Display where
 
 import Control.Monad (forM_)
-import Display.View (AbsoluteView, Primitive (..), Px)
+import Display.View (AbsoluteView, Primitive (..), Px, TextAlignment (..))
 import Foreign.C (CInt (..))
 import Linear (V2 (V2), V4 (V4))
 import Linear.Affine (Point (P))
@@ -30,16 +30,23 @@ render res renderer view = do
 
 renderPrimitive :: Resources -> SDL.Renderer -> (Px, Primitive) -> IO ()
 renderPrimitive res renderer (V2 x y, prim) = case prim of
-  TextPrim t -> do
+  TextPrim alignment t -> do
     let font = cozetteFont res
+
     (width, height) <- Font.size font t
     surface <- Font.blended (cozetteFont res) (V4 255 255 255 255) t
     texture <- SDL.createTextureFromSurface renderer surface
+
+    let (x', y') = case alignment of
+          Centered -> (x - div width 2, y)
+          LeftAligned -> (x, y)
+          RightAligned -> (x - width, y)
+
     SDL.copy
       renderer
       texture
       Nothing
-      (Just $ renderRect width height)
+      (Just $ renderRect x' y' width height)
     pure ()
   SpritePrim imgKey -> do
     let texture = imageTexture (getImage imgKey res)
@@ -48,10 +55,10 @@ renderPrimitive res renderer (V2 x y, prim) = case prim of
         renderer
         texture
         Nothing -- entire Texture
-        (Just $ renderRect (16 :: Int) (16 :: Int))
+        (Just $ renderRect x y (16 :: Int) (16 :: Int))
     pure ()
   where
-    renderRect width height =
+    renderRect x' y' width height =
       SDL.Rectangle
-        (P (V2 (CInt (fromIntegral x)) (CInt (fromIntegral y))))
+        (P (V2 (CInt (fromIntegral x')) (CInt (fromIntegral y'))))
         (V2 (fromIntegral width) (fromIntegral height))

@@ -9,9 +9,9 @@ import Control.Monad.Random (evalRand)
 import Data.IdentityList (IdentityList)
 import qualified Data.IdentityList as IL
 import Data.Text (pack)
-import Display.View (AbsoluteView, Camera (Camera), GameView, UIView, View (..), layoutScreen, px)
-import FRP.Yampa (Event (..), SF, after, dpSwitch, edge, isEvent, mergeEvents, notYet, sscan, tagWith)
-import GameState (Command (Move), Dir (..), GameM, GameState (..), applyCommand, getPlayerPosition, initialGameState, runGameM)
+import Display.View (AbsoluteView, Camera (Camera), GameView, TextAlignment (Centered), UIView, View (..), layoutScreen, px)
+import FRP.Yampa (Event (..), SF, after, dpSwitch, edge, isEvent, mergeEvents, notYet, sscan, tagWith, time)
+import GameState (Command (Move), Dir (..), GameM, GameState (..), getPlayerPosition, initialGameState, runGameM, tick)
 import Gen.Dungeon (generateDungeon)
 import Input (Controller (..))
 import Linear (V2 (V2))
@@ -53,8 +53,9 @@ updatesState seed = sscan loop (initialGameState dungeonGen, seed, []) >>> arr (
 
 updateState :: GameState -> Event Command -> GameM GameState
 updateState state event' = case event' of
+  -- I suppose this is what makes this turn-based
   NoEvent -> pure state
-  Event command -> applyCommand command state
+  Event command -> tick command state
 
 toCommand :: (Controller -> Bool) -> Command -> SF Controller (Event Command)
 toCommand f command = arr f >>> edge >>> arr (tagWith command)
@@ -84,7 +85,7 @@ followsPlayer =
         let playerTilePos = getPlayerPosition state
             playerPxPos = (* (-16)) <$> uncurry px playerTilePos
             halfWindowOffset = ((`div` 2) <$> windowSize)
-         in Camera (playerPxPos + halfWindowOffset) 1
+         in Camera (playerPxPos + halfWindowOffset) 1 windowSize
     )
 
 -- | Paired with an event that indicates to destroy
@@ -101,13 +102,18 @@ damageView :: GameState -> GameEvent -> View
 damageView state (CreatureTookDamage uuid amount) =
   case getCreaturePosition (stateDungeon state) uuid of
     Just (x, y) ->
-      Translate (V2 (16 * x) (16 * y)) (Label (pack $ show amount))
+      Translate (V2 (16 * x) (16 * y)) (Label Centered (pack $ show amount))
     Nothing -> Group []
+damageView _ _ = Group []
 
 damageEffect :: GameState -> GameEvent -> EffectSF
 damageEffect s e = proc () -> do
-  destroyEvent <- after 3 Die -< ()
-  returnA -< (damageView s e, destroyEvent)
+  destroyEvent <- after 1 Die -< ()
+  t <- time -< ()
+  let x = round (t * 20)
+  let y = round (t * (-20))
+  let xTranslate = Translate (V2 x y)
+  returnA -< (xTranslate $ damageView s e, destroyEvent)
 
 -- Dynamically manages a collection of View signals that can destroy themselves via dpSwitch
 damageEffects :: SF (GameState, [GameEvent]) View

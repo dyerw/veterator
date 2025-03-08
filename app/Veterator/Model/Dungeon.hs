@@ -55,6 +55,9 @@ isEmpty Dungeon {dungeonTiles} i = (dungeonTiles ! i) == Floor
 inBounds :: Dungeon -> DungeonPosition -> Bool
 inBounds Dungeon {dungeonTiles} = contains dungeonTiles
 
+getAllCreatures :: Dungeon -> [Creature]
+getAllCreatures = GM.elems . dungeonCreatures
+
 getCreatureAt :: Dungeon -> DungeonPosition -> Maybe Creature
 getCreatureAt Dungeon {dungeonCreatures} p = GM.lookup p dungeonCreatures
 

@@ -1,9 +1,14 @@
+{-# LANGUAGE DeriveFunctor #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE NamedFieldPuns #-}
 
 -- | GameState is the pure core of the game that implements all game rules
 -- and logic, ignoring presentational elements like sound and animations
 module GameState where
 
+import Control.Monad.Identity (Identity (runIdentity))
+import Control.Monad.Random.Lazy (MonadRandom (..), Rand, runRandT)
+import Control.Monad.Writer (MonadWriter (..), WriterT (runWriterT))
 import Data.Maybe (fromJust, fromMaybe, isJust)
 import Data.UUID (UUID)
 import Gen.Dungeon
@@ -17,8 +22,9 @@ import Gen.Dungeon
   )
 import Linear.Affine (Affine ((.+^)))
 import Linear.V2 (V2 (V2))
-import System.Random (StdGen, uniformR)
-import Veterator.Model.Creature (Creature (..), CreatureStats (statsDamageRange))
+import System.Random (StdGen)
+import Veterator.Events (GameEvent (CreatureTookDamage))
+import Veterator.Model.Creature (Creature (..), CreatureStats (statsDamageRange), dealDamage)
 import Veterator.Model.Dungeon
   ( Dungeon (..),
     DungeonPosition,
@@ -29,6 +35,7 @@ import Veterator.Model.Dungeon
     isEmpty,
     moveCreature,
     toPoint,
+    updateCreature,
   )
 
 data Dir = N | NE | E | SE | S | SW | W | NW
@@ -45,10 +52,20 @@ move NW pos = fromPoint $ toPoint pos .+^ V2 (-1) (-1)
 
 data GameState = GameState
   { stateDungeon :: Dungeon,
-    statePlayerUUID :: UUID,
-    -- items :: [(DungeonPosition, Item)],
-    rng :: StdGen
+    statePlayerUUID :: UUID
   }
+
+newtype GameM a = GameM (WriterT [GameEvent] (Rand StdGen) a)
+  deriving
+    ( Functor,
+      Applicative,
+      Monad,
+      MonadRandom,
+      (MonadWriter [GameEvent])
+    )
+
+runGameM :: GameM a -> (StdGen -> ((a, [GameEvent]), StdGen))
+runGameM (GameM m) = runIdentity . runRandT (runWriterT m)
 
 getPlayerWithPosition :: GameState -> (DungeonPosition, Creature)
 getPlayerWithPosition state =
@@ -77,25 +94,37 @@ getMoveResult state destination
     dungeon = stateDungeon state
     creatureAtPos = getCreatureAt dungeon destination
 
-applyCommand :: Command -> GameState -> GameState
+applyCommand :: Command -> GameState -> GameM GameState
 applyCommand (Move d) state =
   case getMoveResult state destination of
     Vacant ->
-      state
-        { stateDungeon = moveCreature (stateDungeon state) (statePlayerUUID state) destination
-        }
+      pure $
+        state
+          { stateDungeon =
+              moveCreature
+                (stateDungeon state)
+                (statePlayerUUID state)
+                destination
+          }
     Enemy enemyId -> applyCommand (Attack enemyId) state
-    _ -> state
+    _ -> pure state
   where
     destination = move d (getPlayerPosition state)
-applyCommand (Attack enemyCreature) state = undefined
-  where
-    playerStats = creatureStats (getPlayer state)
-    (damage, nextRng) = uniformR (statsDamageRange playerStats) (rng state)
+applyCommand (Attack Creature {creatureId}) state = do
+  let playerStats = creatureStats (getPlayer state)
+  damage <- getRandomR (statsDamageRange playerStats)
+  _ <- tell [CreatureTookDamage creatureId damage]
+  pure $
+    state
+      { stateDungeon =
+          updateCreature
+            (stateDungeon state)
+            creatureId
+            (dealDamage damage)
+      }
 
-initialGameState :: StdGen -> DungeonGeneration -> GameState
+initialGameState :: DungeonGeneration -> GameState
 initialGameState
-  rng'
   DungeonGeneration
     { generationTiles,
       generationCreatures,
@@ -109,6 +138,5 @@ initialGameState
               dungeonCreatures = generationCreatures,
               dungeonItems = generationItems
             },
-        statePlayerUUID = generationPlayerUUID,
-        rng = rng'
+        statePlayerUUID = generationPlayerUUID
       }

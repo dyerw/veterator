@@ -20,6 +20,10 @@ executable veterator
     import:           warnings
     main-is:          Main.hs
     other-modules:
+        Data.IdentityList,
+        Data.Extra.List,
+        Data.Extra.Maybe,
+        Data.Extra.Tuple,
         Display,
         Display.View,
         Display.Component,
@@ -29,13 +33,11 @@ executable veterator
         GameState,
         Gen.Dungeon,
         Resources,
-        Data.Extra.List,
-        Data.Extra.Maybe,
-        Data.Extra.Tuple,
         Math.Geometry.Extra.GridMap,
         Veterator.Model.Dungeon,
         Veterator.Model.Creature,
-        Veterator.Views
+        Veterator.Views,
+        Veterator.Events
 
 
     build-depends:    

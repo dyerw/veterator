@@ -13,7 +13,7 @@ import Veterator.Model.Creature (Creature (..), CreatureType (..))
 import Veterator.Model.Dungeon (Dungeon (..), Tile (..))
 
 uiView :: GameState -> View
-uiView _ = Label "hello world"
+uiView _ = Label "."
 
 worldView :: GameState -> View
 worldView state =

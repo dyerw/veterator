@@ -1,16 +1,16 @@
 module Gen.Dungeon where
 
-import Control.Monad.Random.Lazy (MonadRandom (..), Rand)
+import Control.Monad.Random.Lazy (MonadRandom (..), Rand, foldM)
 import Data.Extra.List (count, shuffle)
-import Data.Function ((&))
 import Data.UUID (UUID)
+import Debug.Trace (trace)
 import Math.Geometry.Grid (Grid (neighbours))
-import Math.Geometry.Grid.Octagonal (rectOctGrid)
-import Math.Geometry.GridMap (GridMap (insert, mapWithKey, toGrid, (!)))
+import Math.Geometry.Grid.Octagonal (UnboundedOctGrid (UnboundedOctGrid), rectOctGrid)
+import Math.Geometry.GridMap (GridMap (keys, mapWithKey, (!)), insert, keys)
 import Math.Geometry.GridMap.Lazy (empty, lazyGridMap, lazyGridMapIndexed)
 import System.Random (RandomGen)
 import Veterator.Model.Creature (Creature (..), CreatureStats (..), CreatureType (..))
-import Veterator.Model.Dungeon (Creatures, Items, Tile (..), Tiles, emptyTiles)
+import Veterator.Model.Dungeon (Creatures, DungeonPosition, Items, Tile (..), TileChunk, Tiles, chunkSize, emptyChunkTiles)
 
 data DungeonGeneration = DungeonGeneration
   { generationTiles :: Tiles,
@@ -39,46 +39,27 @@ randomCurrentUse = do
     2 -> GoblinDen
     _ -> WizardsLaboratory
 
-generateDungeon :: (RandomGen g) => Int -> Int -> Rand g DungeonGeneration
-generateDungeon width height = do
-  tiles <- generateTiles width height
-  (creatureGrid, playerUUID) <- generateCreatures tiles
+generateDungeon :: (RandomGen g) => Rand g DungeonGeneration
+generateDungeon = do
+  -- Generate chunk (0,0) and all of its neighbors
+  initialChunk <- generateChunkTiles
+  let chunks = lazyGridMapIndexed UnboundedOctGrid [((0, 0), initialChunk)]
+  withNeighborsChunks <- foldM addChunk chunks (neighbours chunks (0, 0))
+  let spawnPositions = emptyChunkTiles (0, 0) initialChunk
+  let playerSpawn = head spawnPositions
+  playerUUID <- getRandom
+  creatures <- insert playerSpawn (mkPlayer playerUUID) <$> generateCreatures (tail spawnPositions)
+
+  trace (show $ keys withNeighborsChunks) pure ()
+
   pure
     DungeonGeneration
-      { generationTiles = tiles,
-        generationCreatures = creatureGrid,
+      { generationTiles = withNeighborsChunks,
+        generationCreatures = creatures,
         generationPlayerUUID = playerUUID,
-        generationItems = empty (toGrid tiles)
+        generationItems = empty UnboundedOctGrid
       }
-
-genUUIDs :: (RandomGen g) => Rand g [UUID]
-genUUIDs = getRandoms
-
-generateCreatures :: (RandomGen g) => Tiles -> Rand g (Creatures, UUID)
-generateCreatures tiles = do
-  spawnPositions <- shuffle (emptyTiles tiles)
-  let validSpawns = length spawnPositions
-  -- One spawn must be reserved for the player
-  numMonsters <- min (validSpawns - 1) <$> getRandomR (10 :: Int, 20 :: Int)
-  uuids <- genUUIDs
-  let playerUUID = head uuids
-  let goblins = take numMonsters $ mkGoblin <$> tail uuids
-  pure
-    ( lazyGridMapIndexed
-        (toGrid tiles)
-        (zip spawnPositions goblins)
-        & insert (last spawnPositions) (mkPlayer playerUUID),
-      playerUUID
-    )
   where
-    mkGoblin uuid =
-      Creature
-        { creatureId = uuid,
-          creatureType = Goblin,
-          creatureHealth = 10,
-          creatureStats = CreatureStats {statsMaxHealth = 10, statsDamageRange = (1, 3)},
-          creatureInventory = []
-        }
     mkPlayer uuid =
       Creature
         { creatureId = uuid,
@@ -88,13 +69,42 @@ generateCreatures tiles = do
           creatureInventory = []
         }
 
-generateTiles :: (RandomGen g) => Int -> Int -> Rand g Tiles
-generateTiles width height = do
+genUUIDs :: (RandomGen g) => Rand g [UUID]
+genUUIDs = getRandoms
+
+generateCreatures :: (RandomGen g) => [DungeonPosition] -> Rand g Creatures
+generateCreatures validSpawns = do
+  numMonsters <- min (length validSpawns) <$> getRandomR (10 :: Int, 20 :: Int)
+  spawnPositions <- take numMonsters <$> shuffle validSpawns
+  uuids <- genUUIDs
+  let goblins = mkGoblin <$> uuids
+  pure $
+    lazyGridMapIndexed
+      UnboundedOctGrid
+      (zip spawnPositions goblins)
+  where
+    mkGoblin uuid =
+      Creature
+        { creatureId = uuid,
+          creatureType = Goblin,
+          creatureHealth = 10,
+          creatureStats = CreatureStats {statsMaxHealth = 10, statsDamageRange = (1, 3)},
+          creatureInventory = []
+        }
+
+-- TODO: Stitch the automata together
+addChunk :: (RandomGen g) => Tiles -> (Int, Int) -> Rand g Tiles
+addChunk tiles chunkPos = do
+  newChunk <- generateChunkTiles
+  pure $ insert chunkPos newChunk tiles
+
+generateChunkTiles :: (RandomGen g) => Rand g TileChunk
+generateChunkTiles = do
   rolls <- getRandomRs (0 :: Float, 1 :: Float)
-  let dungeonGrid = lazyGridMap (rectOctGrid width height) (floatToTile <$> rolls)
+  let dungeonGrid = lazyGridMap (rectOctGrid chunkSize chunkSize) (floatToTile <$> rolls)
   pure $ nTimes 5 caveAutomataStep dungeonGrid
   where
-    caveAutomataStep :: Tiles -> Tiles
+    caveAutomataStep :: TileChunk -> TileChunk
     caveAutomataStep g =
       mapWithKey
         ( \i t ->

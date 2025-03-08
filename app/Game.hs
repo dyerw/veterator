@@ -49,7 +49,7 @@ updatesState seed = sscan loop (initialGameState dungeonGen, seed, []) >>> arr (
     loop (state, rng, _) event' =
       let ((nextState, gameEvents), nextRng) = runGameM (updateState state event') rng
        in (nextState, nextRng, gameEvents)
-    dungeonGen = evalRand (generateDungeon 100 100) seed
+    dungeonGen = evalRand generateDungeon seed
 
 updateState :: GameState -> Event Command -> GameM GameState
 updateState state event' = case event' of

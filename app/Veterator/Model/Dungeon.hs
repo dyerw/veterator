@@ -1,16 +1,20 @@
 {-# LANGUAGE NamedFieldPuns #-}
+{-# LANGUAGE TupleSections #-}
 
 module Veterator.Model.Dungeon where
 
+import Control.Monad (join)
+import Data.Bifunctor (Bifunctor (bimap))
 import Data.Foldable (find)
 import Data.Function ((&))
+import Data.Maybe (fromMaybe)
 import Data.UUID (UUID)
 import Linear (V2 (V2))
 import Linear.Affine (Point (P))
 import Math.Geometry.Extra.GridMap (swap)
-import Math.Geometry.Grid (Grid (Index, contains))
-import Math.Geometry.Grid.Octagonal (RectOctGrid)
-import Math.Geometry.GridMap (GridMap (toList), (!))
+import Math.Geometry.Grid (Grid (Index))
+import Math.Geometry.Grid.Octagonal (RectOctGrid, UnboundedOctGrid)
+import Math.Geometry.GridMap (GridMap (toList))
 import qualified Math.Geometry.GridMap as GM
 import Math.Geometry.GridMap.Lazy (LGridMap)
 import Veterator.Model.Creature (Creature (creatureId), Item, isAlive)
@@ -21,15 +25,44 @@ data Dungeon = Dungeon
     dungeonItems :: Items
   }
 
+-- Dungeon position is in one uninterrupted coordinate space and can be decomposed
+-- into a world position and a chunk position
 type DungeonPosition = Index RectOctGrid
 
-type Tiles = LGridMap RectOctGrid Tile
+-- Chunk position is the coordinate of a tile within a chunk
+type TilePosition = Index RectOctGrid
+
+type ChunkPosition = Index RectOctGrid
+
+-- Tile index is a coordinate in the grid of grids and then in
+-- the sub-grid
+type TileIndex = (ChunkPosition, TilePosition)
+
+chunkSize :: Int
+chunkSize = 100
+
+dungeonToChunk :: Int -> (Int, Int)
+dungeonToChunk i = (div i chunkSize, mod i chunkSize)
+
+chunkToDungeon :: (Int, Int) -> Int
+chunkToDungeon (c, d) = c * chunkSize + d
+
+dungeonPosToTileIndex :: DungeonPosition -> TileIndex
+dungeonPosToTileIndex = (\((cx, dx), (cy, dy)) -> ((cx, cy), (dx, dy))) . bimap dungeonToChunk dungeonToChunk
+
+tileIndexToDungeonPos :: TileIndex -> DungeonPosition
+tileIndexToDungeonPos = bimap chunkToDungeon chunkToDungeon . (\((cx, cy), (dx, dy)) -> ((cx, dx), (cy, dy)))
+
+type TileChunk = LGridMap RectOctGrid Tile
+
+type Tiles = LGridMap UnboundedOctGrid TileChunk
 
 data Tile = Floor | Wall | StairUp | StairDown deriving (Eq)
 
-type Creatures = LGridMap RectOctGrid Creature
+-- Since these are sparsely populated they're indexed by DungeonPosition
+type Creatures = LGridMap UnboundedOctGrid Creature
 
-type Items = LGridMap RectOctGrid [Item]
+type Items = LGridMap UnboundedOctGrid [Item]
 
 toPoint :: DungeonPosition -> Point V2 Int
 toPoint (x, y) = P (V2 x y)
@@ -37,8 +70,18 @@ toPoint (x, y) = P (V2 x y)
 fromPoint :: Point V2 Int -> DungeonPosition
 fromPoint (P (V2 x y)) = (x, y)
 
+findChunkTiles :: Tile -> ChunkPosition -> TileChunk -> [DungeonPosition]
+findChunkTiles t chunkPos chunk =
+  chunk
+    & toList
+    & filter ((== t) . snd)
+    & map (tileIndexToDungeonPos . (chunkPos,) . fst)
+
+emptyChunkTiles :: ChunkPosition -> TileChunk -> [DungeonPosition]
+emptyChunkTiles = findChunkTiles Floor
+
 findTiles :: Tile -> Tiles -> [DungeonPosition]
-findTiles t tiles = tiles & toList & filter ((== t) . snd) & map fst
+findTiles t tiles = toList tiles & map (uncurry (findChunkTiles t)) & join
 
 dungeonFindTiles :: Tile -> Dungeon -> [DungeonPosition]
 dungeonFindTiles t d = findTiles t (dungeonTiles d)
@@ -50,10 +93,28 @@ dungeonEmptyTiles :: Dungeon -> [DungeonPosition]
 dungeonEmptyTiles = emptyTiles . dungeonTiles
 
 isEmpty :: Dungeon -> DungeonPosition -> Bool
-isEmpty Dungeon {dungeonTiles} i = (dungeonTiles ! i) == Floor
+isEmpty Dungeon {dungeonTiles} pos = getTile pos dungeonTiles == Floor
 
-inBounds :: Dungeon -> DungeonPosition -> Bool
-inBounds Dungeon {dungeonTiles} = contains dungeonTiles
+getTile :: DungeonPosition -> Tiles -> Tile
+getTile pos tiles = tile
+  where
+    (ci, ti) = dungeonPosToTileIndex pos
+    fnErrorInfo = "in getTile " ++ show pos ++ ": "
+    chunk =
+      fromMaybe (error $ fnErrorInfo ++ "Invalid chunk index: " ++ show ci ++ " in generated chunks: " ++ show (GM.keys tiles)) $
+        GM.lookup ci tiles
+    tile =
+      fromMaybe (error $ fnErrorInfo ++ "Invalid tile index: " ++ show ti) $
+        GM.lookup ti chunk
+
+-- Return a rectangular slice of the dungeon tiles, errors if ungenerated
+tileSection :: DungeonPosition -> Int -> Int -> Tiles -> [(DungeonPosition, Tile)]
+tileSection (x, y) width height tiles =
+  [ (pos, getTile pos tiles)
+    | x' <- [0 .. (width - 1)],
+      y' <- [0 .. (height - 1)],
+      let pos = (x + x', y + y')
+  ]
 
 getAllCreatures :: Dungeon -> [Creature]
 getAllCreatures = GM.elems . dungeonCreatures

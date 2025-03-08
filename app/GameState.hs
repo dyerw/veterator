@@ -33,7 +33,6 @@ import Veterator.Model.Dungeon
     getCreature,
     getCreatureAt,
     getCreatureWithPosition,
-    inBounds,
     isEmpty,
     moveCreature,
     removeDeadCreatures,
@@ -93,11 +92,10 @@ getPlayer = snd . getPlayerWithPosition
 
 data Command = Move Dir | Attack Creature
 
-data MoveResult = Vacant | Blocked | OutOfBounds | Enemy Creature
+data MoveResult = Vacant | Blocked | Enemy Creature
 
 getMoveResult :: GameState -> DungeonPosition -> MoveResult
 getMoveResult state destination
-  | not (inBounds dungeon destination) = OutOfBounds
   | isJust creatureAtPos = Enemy (fromJust creatureAtPos)
   | not (isEmpty dungeon destination) = Blocked
   | otherwise = Vacant

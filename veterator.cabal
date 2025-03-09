@@ -2,16 +2,11 @@ cabal-version:      3.0
 name:               veterator
 version:            0.1.0.0
 synopsis:           7DRL entry
--- description:
-license:            BSD-3-Clause
-license-file:       LICENSE
 author:             Liam Dyer
 maintainer:         liamd94@gmail.com
--- copyright:
 category:           Game
 build-type:         Simple
 extra-doc-files:    CHANGELOG.md
--- extra-source-files:
 
 common warnings
     ghc-options: -Wall
@@ -19,6 +14,17 @@ common warnings
 executable veterator
     import:           warnings
     main-is:          Main.hs
+    hs-source-dirs:   app
+    default-language: Haskell2010
+
+    build-depends:
+        base ^>=4.17.2.1,
+        veterator
+
+library
+    import:           warnings
+    exposed-modules:
+        Veterator 
     other-modules:
         Data.IdentityList,
         Data.Extra.List,
@@ -34,6 +40,9 @@ executable veterator
         Gen.Dungeon,
         Resources,
         Math.Geometry.Extra.GridMap,
+        Veterator.AI,
+        Veterator.Algorithm,
+        Veterator.Dir,
         Veterator.Model.Dungeon,
         Veterator.Model.Creature,
         Veterator.Views,
@@ -55,10 +64,26 @@ executable veterator
         grid >= 7.8.15,
         vector >= 0.13,
         uuid >= 1.3,
-        mtl >= 2.3
+        mtl >= 2.3,
+        pqueue >= 1.5.0.0
 
-    hs-source-dirs:   app
+    hs-source-dirs:   src
     default-language: Haskell2010
 
     default-extensions:
         OverloadedStrings
+
+test-suite spec
+  type: exitcode-stdio-1.0
+  main-is: Spec.hs
+  hs-source-dirs:
+      test
+  ghc-options: -Wall
+  build-depends:
+      base ==4.*
+    , hspec ==2.*
+    , veterator
+  other-modules:
+      Veterator.AlgorithmSpec
+  default-language: Haskell2010
+  build-tool-depends: hspec-discover:hspec-discover == 2.*

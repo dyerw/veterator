@@ -22,38 +22,23 @@ import Gen.Dungeon
       ),
     fillNeighboringChunks,
   )
-import Linear.Affine (Affine ((.+^)))
-import Linear.V2 (V2 (V2))
 import System.Random (StdGen)
+import Veterator.Dir (move)
 import Veterator.Events (GameEvent (CreatureDied, CreatureTookDamage, PlayerGainedXP))
-import Veterator.Model.Creature (Creature (..), CreatureStats (statsDamageRange), dealDamage, isAlive)
+import Veterator.Model.Creature (Creature (..), CreatureAction (..), CreatureStats (statsDamageRange), dealDamage, isAlive)
 import Veterator.Model.Dungeon
   ( ChunkPosition,
     Dungeon (..),
     DungeonPosition,
     dungeonPosToTileIndex,
-    fromPoint,
     getCreature,
     getCreatureAt,
     getCreatureWithPosition,
     isEmpty,
     moveCreature,
     removeDeadCreatures,
-    toPoint,
     updateCreature,
   )
-
-data Dir = N | NE | E | SE | S | SW | W | NW
-
-move :: Dir -> DungeonPosition -> DungeonPosition
-move N pos = fromPoint $ toPoint pos .+^ V2 0 (-1)
-move NE pos = fromPoint $ toPoint pos .+^ V2 1 (-1)
-move E pos = fromPoint $ toPoint pos .+^ V2 1 0
-move SE pos = fromPoint $ toPoint pos .+^ V2 1 1
-move S pos = fromPoint $ toPoint pos .+^ V2 0 1
-move SW pos = fromPoint $ toPoint pos .+^ V2 (-1) 1
-move W pos = fromPoint $ toPoint pos .+^ V2 (-1) 0
-move NW pos = fromPoint $ toPoint pos .+^ V2 (-1) (-1)
 
 data GameState = GameState
   { stateDungeon :: Dungeon,
@@ -96,8 +81,6 @@ getPlayerChunk = fst . dungeonPosToTileIndex . getPlayerPosition
 getPlayer :: GameState -> Creature
 getPlayer = snd . getPlayerWithPosition
 
-data Command = Move Dir | Attack Creature
-
 data MoveResult = Vacant | Blocked | Enemy Creature
 
 getMoveResult :: GameState -> DungeonPosition -> MoveResult
@@ -109,10 +92,10 @@ getMoveResult state destination
     dungeon = stateDungeon state
     creatureAtPos = getCreatureAt dungeon destination
 
-tick :: Command -> GameState -> GameM GameState
+tick :: CreatureAction -> GameState -> GameM GameState
 tick command state = applyCommand command state >>= cleanup
 
-applyCommand :: Command -> GameState -> GameM GameState
+applyCommand :: CreatureAction -> GameState -> GameM GameState
 applyCommand (Move d) state =
   case getMoveResult state destination of
     Vacant ->

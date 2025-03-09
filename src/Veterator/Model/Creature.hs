@@ -3,6 +3,7 @@
 module Veterator.Model.Creature where
 
 import Data.UUID (UUID)
+import Veterator.Dir (Dir)
 
 data CreatureType = Adventurer | Goblin deriving (Show)
 
@@ -17,9 +18,10 @@ data Creature = Creature
   }
   deriving (Show)
 
-isHostile :: Creature -> Bool
-isHostile Creature {creatureType = Goblin} = True
-isHostile _ = False
+isHostile :: Creature -> Creature -> Bool
+isHostile Creature {creatureType = Goblin} Creature {creatureType = Adventurer} = True
+isHostile Creature {creatureType = Adventurer} Creature {creatureType = Goblin} = True
+isHostile _ _ = False
 
 isAlive :: Creature -> Bool
 isAlive Creature {creatureHealth} = creatureHealth > 0
@@ -28,3 +30,5 @@ dealDamage :: Int -> Creature -> Creature
 dealDamage i c = c {creatureHealth = creatureHealth c - i}
 
 data CreatureStats = CreatureStats {statsMaxHealth :: Int, statsDamageRange :: (Int, Int)} deriving (Show)
+
+data CreatureAction = Move Dir | Attack Creature

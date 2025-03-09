@@ -9,8 +9,6 @@ import Data.Foldable (find)
 import Data.Function ((&))
 import Data.Maybe (fromMaybe)
 import Data.UUID (UUID)
-import Linear (V2 (V2))
-import Linear.Affine (Point (P))
 import Math.Geometry.Extra.GridMap (swap)
 import Math.Geometry.Grid (Grid (Index))
 import Math.Geometry.Grid.Octagonal (RectOctGrid, UnboundedOctGrid)
@@ -63,12 +61,6 @@ data Tile = Floor | Wall | StairUp | StairDown deriving (Eq)
 type Creatures = LGridMap UnboundedOctGrid Creature
 
 type Items = LGridMap UnboundedOctGrid [Item]
-
-toPoint :: DungeonPosition -> Point V2 Int
-toPoint (x, y) = P (V2 x y)
-
-fromPoint :: Point V2 Int -> DungeonPosition
-fromPoint (P (V2 x y)) = (x, y)
 
 findChunkTiles :: Tile -> ChunkPosition -> TileChunk -> [DungeonPosition]
 findChunkTiles t chunkPos chunk =

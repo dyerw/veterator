@@ -11,12 +11,14 @@ import qualified Data.IdentityList as IL
 import Data.Text (pack)
 import Display.View (AbsoluteView, Camera (Camera), GameView, TextAlignment (Centered), UIView, View (..), layoutScreen, px)
 import FRP.Yampa (Event (..), SF, after, dpSwitch, edge, isEvent, mergeEvents, notYet, sscan, tagWith, time)
-import GameState (Command (Move), Dir (..), GameM, GameState (..), getPlayerPosition, initialGameState, runGameM, tick)
+import GameState (GameM, GameState (..), getPlayerPosition, initialGameState, runGameM, tick)
 import Gen.Dungeon (generateDungeon)
 import Input (Controller (..))
 import Linear (V2 (V2))
 import System.Random (StdGen)
+import Veterator.Dir (Dir (..))
 import Veterator.Events (GameEvent (..))
+import Veterator.Model.Creature (CreatureAction (..))
 import Veterator.Model.Dungeon (getCreaturePosition)
 import Veterator.Views (uiView, worldView)
 
@@ -42,7 +44,7 @@ entireGame seed = proc gi -> do
   absoluteView <- layoutsScreen -< (Group [wv, effects], uiv, camera)
   returnA -< GameOutput absoluteView
 
-updatesState :: StdGen -> SF (Event Command) (GameState, [GameEvent])
+updatesState :: StdGen -> SF (Event CreatureAction) (GameState, [GameEvent])
 updatesState seed = sscan loop (initialGameState dungeonGen, seed, []) >>> arr (\(state, _, gameEvents) -> (state, gameEvents))
   where
     -- Internally we need to hold the StdGen state
@@ -51,21 +53,21 @@ updatesState seed = sscan loop (initialGameState dungeonGen, seed, []) >>> arr (
        in (nextState, nextRng, gameEvents)
     dungeonGen = evalRand generateDungeon seed
 
-updateState :: GameState -> Event Command -> GameM GameState
+updateState :: GameState -> Event CreatureAction -> GameM GameState
 updateState state event' = case event' of
   -- I suppose this is what makes this turn-based
   NoEvent -> pure state
   Event command -> tick command state
 
-toCommand :: (Controller -> Bool) -> Command -> SF Controller (Event Command)
-toCommand f command = arr f >>> edge >>> arr (tagWith command)
+toAction :: (Controller -> Bool) -> CreatureAction -> SF Controller (Event CreatureAction)
+toAction f command = arr f >>> edge >>> arr (tagWith command)
 
-commands :: SF Controller (Event Command)
+commands :: SF Controller (Event CreatureAction)
 commands = proc controller -> do
-  moveW <- (toCommand controllerLeft (Move W)) -< controller
-  moveE <- (toCommand controllerRight (Move E)) -< controller
-  moveN <- (toCommand controllerUp (Move N)) -< controller
-  moveS <- (toCommand controllerDown (Move S)) -< controller
+  moveW <- (toAction controllerLeft (Move W)) -< controller
+  moveE <- (toAction controllerRight (Move E)) -< controller
+  moveN <- (toAction controllerUp (Move N)) -< controller
+  moveS <- (toAction controllerDown (Move S)) -< controller
   returnA -< mergeEvents [moveW, moveE, moveN, moveS]
 
 viewsWorld :: SF GameState View

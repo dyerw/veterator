@@ -3,10 +3,10 @@ module Gen.Dungeon where
 import Control.Monad.Random.Lazy (MonadRandom (..), Rand, foldM)
 import Data.Extra.List (count, shuffle)
 import Data.UUID (UUID)
-import Debug.Trace (trace)
 import Math.Geometry.Grid (Grid (neighbours))
 import Math.Geometry.Grid.Octagonal (UnboundedOctGrid (UnboundedOctGrid), rectOctGrid)
-import Math.Geometry.GridMap (GridMap (keys, mapWithKey, (!)), insert, keys)
+import Math.Geometry.GridMap (GridMap (mapWithKey, (!)), insert)
+import qualified Math.Geometry.GridMap as GM
 import Math.Geometry.GridMap.Lazy (empty, lazyGridMap, lazyGridMapIndexed)
 import System.Random (RandomGen)
 import Veterator.Model.Creature (Creature (..), CreatureStats (..), CreatureType (..))
@@ -44,17 +44,14 @@ generateDungeon = do
   -- Generate chunk (0,0) and all of its neighbors
   initialChunk <- generateChunkTiles
   let chunks = lazyGridMapIndexed UnboundedOctGrid [((0, 0), initialChunk)]
-  withNeighborsChunks <- foldM addChunk chunks (neighbours chunks (0, 0))
+  withNeighboringChunks <- fillNeighboringChunks chunks (0, 0)
   let spawnPositions = emptyChunkTiles (0, 0) initialChunk
   let playerSpawn = head spawnPositions
   playerUUID <- getRandom
   creatures <- insert playerSpawn (mkPlayer playerUUID) <$> generateCreatures (tail spawnPositions)
-
-  trace (show $ keys withNeighborsChunks) pure ()
-
   pure
     DungeonGeneration
-      { generationTiles = withNeighborsChunks,
+      { generationTiles = withNeighboringChunks,
         generationCreatures = creatures,
         generationPlayerUUID = playerUUID,
         generationItems = empty UnboundedOctGrid
@@ -92,11 +89,17 @@ generateCreatures validSpawns = do
           creatureInventory = []
         }
 
+fillNeighboringChunks :: (RandomGen g) => Tiles -> (Int, Int) -> Rand g Tiles
+fillNeighboringChunks tiles center = do
+  foldM fillChunk tiles (neighbours tiles center)
+
 -- TODO: Stitch the automata together
-addChunk :: (RandomGen g) => Tiles -> (Int, Int) -> Rand g Tiles
-addChunk tiles chunkPos = do
-  newChunk <- generateChunkTiles
-  pure $ insert chunkPos newChunk tiles
+fillChunk :: (RandomGen g) => Tiles -> (Int, Int) -> Rand g Tiles
+fillChunk tiles chunkPos = case GM.lookup chunkPos tiles of
+  Nothing -> do
+    newChunk <- generateChunkTiles
+    pure $ insert chunkPos newChunk tiles
+  Just _ -> pure tiles
 
 generateChunkTiles :: (RandomGen g) => Rand g TileChunk
 generateChunkTiles = do

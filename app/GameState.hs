@@ -8,7 +8,7 @@
 module GameState where
 
 import Control.Monad.Identity (Identity (runIdentity))
-import Control.Monad.Random.Lazy (MonadRandom (..), Rand, runRandT)
+import Control.Monad.Random.Lazy (MonadRandom (..), MonadTrans (lift), Rand, runRandT)
 import Control.Monad.Writer (MonadWriter (..), WriterT (runWriterT))
 import Data.Maybe (fromJust, fromMaybe, isJust)
 import Data.UUID (UUID)
@@ -20,6 +20,7 @@ import Gen.Dungeon
         generationPlayerUUID,
         generationTiles
       ),
+    fillNeighboringChunks,
   )
 import Linear.Affine (Affine ((.+^)))
 import Linear.V2 (V2 (V2))
@@ -27,8 +28,10 @@ import System.Random (StdGen)
 import Veterator.Events (GameEvent (CreatureDied, CreatureTookDamage, PlayerGainedXP))
 import Veterator.Model.Creature (Creature (..), CreatureStats (statsDamageRange), dealDamage, isAlive)
 import Veterator.Model.Dungeon
-  ( Dungeon (..),
+  ( ChunkPosition,
+    Dungeon (..),
     DungeonPosition,
+    dungeonPosToTileIndex,
     fromPoint,
     getCreature,
     getCreatureAt,
@@ -87,6 +90,9 @@ getPlayerWithPosition state =
 getPlayerPosition :: GameState -> DungeonPosition
 getPlayerPosition = fst . getPlayerWithPosition
 
+getPlayerChunk :: GameState -> ChunkPosition
+getPlayerChunk = fst . dungeonPosToTileIndex . getPlayerPosition
+
 getPlayer :: GameState -> Creature
 getPlayer = snd . getPlayerWithPosition
 
@@ -136,9 +142,18 @@ applyCommand (Attack Creature {creatureId}) state = do
 
 cleanup :: GameState -> GameM GameState
 cleanup state = do
+  -- Cleanup dead creatures
+  let dungeon = stateDungeon state
   let (deadCreatures, nextDungeon) = removeDeadCreatures (stateDungeon state)
   _ <- logEvents $ CreatureDied <$> deadCreatures
-  pure $ state {stateDungeon = nextDungeon}
+
+  -- Generate new chunks on demand
+  let tiles = dungeonTiles dungeon
+  let chunkPos = getPlayerChunk state
+  nextTiles <- GameM $ lift $ fillNeighboringChunks tiles chunkPos
+  let nextDungeon' = nextDungeon {dungeonTiles = nextTiles}
+
+  pure $ state {stateDungeon = nextDungeon'}
 
 gainXP :: Int -> GameState -> GameM GameState
 gainXP amount state = do

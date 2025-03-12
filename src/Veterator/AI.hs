@@ -6,5 +6,6 @@ import Veterator.Model.Dungeon (Dungeon)
 
 type AI = Dungeon -> UUID -> CreatureAction
 
-attackOnSightAI :: AI
-attackOnSightAI dungeon actor = undefined
+-- attackOnSightAI :: AI
+-- attackOnSightAI dungeon actor =
+--     let closestHostile =

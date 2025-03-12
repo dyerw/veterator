@@ -11,6 +11,10 @@ instance Functor IdentityList where
   fmap :: (a -> b) -> IdentityList a -> IdentityList b
   fmap f il = il {assocs = fmap (second f) (assocs il)}
 
+instance Foldable IdentityList where
+  foldr :: (a -> b -> b) -> b -> IdentityList a -> b
+  foldr f b il = foldr f b (elems il)
+
 empty :: IdentityList a
 empty = IdentityList 0 []
 

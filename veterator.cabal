@@ -24,7 +24,8 @@ executable veterator
 library
     import:           warnings
     exposed-modules:
-        Veterator 
+        Veterator,
+        Veterator.Algorithm,
     other-modules:
         Data.IdentityList,
         Data.Extra.List,
@@ -35,13 +36,13 @@ library
         Display.Component,
         Input,
         Time,
+        FRP,
         Game,
         GameState,
         Gen.Dungeon,
         Resources,
         Math.Geometry.Extra.GridMap,
         Veterator.AI,
-        Veterator.Algorithm,
         Veterator.Dir,
         Veterator.Model.Dungeon,
         Veterator.Model.Creature,
@@ -82,6 +83,9 @@ test-suite spec
   build-depends:
       base ==4.*
     , hspec ==2.*
+    , hspec-hedgehog == 0.3.0.0
+    , hedgehog >= 1.5
+    , grid >= 7.8.15
     , veterator
   other-modules:
       Veterator.AlgorithmSpec

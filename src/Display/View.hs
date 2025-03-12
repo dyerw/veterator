@@ -1,9 +1,12 @@
+{-# LANGUAGE Arrows #-}
 {-# LANGUAGE NamedFieldPuns #-}
 
 -- | Declarative descriptions of game visuals
 module Display.View where
 
 import Data.Text (Text)
+import FRP (keyPar)
+import FRP.Yampa (SF, parC, returnA, second)
 import Linear.V2 (V2 (V2))
 import Resources (ImageKey)
 
@@ -55,13 +58,6 @@ data Camera = Camera
   }
   deriving (Show)
 
-type GameView = View
-
-type UIView = View
-
-layoutScreen :: GameView -> UIView -> Camera -> AbsoluteView
-layoutScreen gv uiv cam = layout gv cam <> layout uiv (cam {cameraTranslation = px 0 0, cameraScale = 0})
-
 px :: Int -> Int -> Px
 px = V2
 
@@ -109,3 +105,8 @@ sparseGridLayout w h views =
     [ Translate (px (x * w) (y * h)) view
       | ((x, y), view) <- views
     ]
+
+gridSF :: (Ord k) => Int -> Int -> (a -> k) -> SF a View -> SF [((Int, Int), a)] View
+gridSF w h keyFn viewSF = proc as -> do
+  vs <- keyPar (keyFn . snd) (second viewSF) -< as
+  returnA -< sparseGridLayout w h vs

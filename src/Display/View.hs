@@ -6,7 +6,7 @@ module Display.View where
 
 import Data.Text (Text)
 import FRP (keyPar)
-import FRP.Yampa (SF, parC, returnA, second)
+import FRP.Yampa (SF, returnA, second)
 import Linear.V2 (V2 (V2))
 import Resources (ImageKey)
 

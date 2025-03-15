@@ -20,9 +20,9 @@ import Math.Geometry.GridMap (GridMap (..))
 import Resources (ImageKey (..))
 import Veterator.Events (GameEvent (..))
 import Veterator.Model.Creature (Creature (..), CreatureType (..))
-import Veterator.Model.Dungeon (Dungeon (..), Tile (..), tileSection)
+import Veterator.Model.Dungeon (Dungeon (..), Tile (..), fromTup, tileSection)
 
-rootView :: SF (GameState, [GameEvent]) View
+rootView :: SF (GameState, [GameEvent d]) View
 rootView = proc (state, events) -> do
   wv <- worldView -< (state, events)
   let ui = uiView state
@@ -39,16 +39,16 @@ uiView state =
 visibleTileSectionSize :: Int
 visibleTileSectionSize = 100
 
-worldView :: SF (GameState, [GameEvent]) View
+worldView :: SF (GameState, [GameEvent d]) View
 worldView = proc (state, events) -> do
   cv <- creaturesView -< (state, events)
   let tv = tilesView state
   returnA -< Group [tv, cv]
 
-creaturesView :: SF (GameState, [GameEvent]) View
+creaturesView :: SF (GameState, [GameEvent d]) View
 creaturesView = proc (state, events) -> do
   let dungeon = stateDungeon state
-  let creatures = Bi.second (,events) <$> toList (dungeonCreatures dungeon)
+  let creatures = Bi.bimap fromTup (,events) <$> toList (dungeonCreatures dungeon)
   view <- gridSF 16 16 (creatureId . fst) creatureView -< creatures
   returnA -< (observe view)
 
@@ -56,10 +56,10 @@ tilesView :: GameState -> View
 tilesView state =
   let dungeon = stateDungeon state
       tiles = dungeonTiles dungeon
-      (x, y) = getPlayerPosition state
+      (V2 x y) = getPlayerPosition state
       visibleTiles =
         tileSection
-          (x - div visibleTileSectionSize 2, y - div visibleTileSectionSize 2)
+          (V2 (x - div visibleTileSectionSize 2) (y - div visibleTileSectionSize 2))
           visibleTileSectionSize
           visibleTileSectionSize
           tiles
@@ -81,7 +81,10 @@ floatingDamageNumber amount =
   where
     view = Label Centered (pack $ show amount)
 
-creatureView :: SF (Creature, [GameEvent]) View
+-- attackBump :: SF (Event Dir) (View -> View)
+-- attackBump = proc
+
+creatureView :: SF (Creature, [GameEvent d]) View
 creatureView = proc (Creature {creatureId, creatureType}, events) -> do
   let damageTaken =
         mapMaybe

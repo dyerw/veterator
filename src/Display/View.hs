@@ -99,14 +99,14 @@ vbox space = Group . translateMap space (`px` 0)
 gridLayout :: Int -> Int -> [[View]] -> View
 gridLayout w h = vbox h . fmap (hbox w)
 
-sparseGridLayout :: Int -> Int -> [((Int, Int), View)] -> View
+sparseGridLayout :: Int -> Int -> [(V2 Int, View)] -> View
 sparseGridLayout w h views =
   Group
     [ Translate (px (x * w) (y * h)) view
-      | ((x, y), view) <- views
+      | (V2 x y, view) <- views
     ]
 
-gridSF :: (Ord k) => Int -> Int -> (a -> k) -> SF a View -> SF [((Int, Int), a)] View
+gridSF :: (Ord k) => Int -> Int -> (a -> k) -> SF a View -> SF [(V2 Int, a)] View
 gridSF w h keyFn viewSF = proc as -> do
   vs <- keyPar (keyFn . snd) (second viewSF) -< as
   returnA -< sparseGridLayout w h vs

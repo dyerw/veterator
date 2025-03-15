@@ -10,7 +10,7 @@ import qualified Math.Geometry.GridMap as GM
 import Math.Geometry.GridMap.Lazy (empty, lazyGridMap, lazyGridMapIndexed)
 import System.Random (RandomGen)
 import Veterator.Model.Creature (Creature (..), CreatureStats (..), CreatureType (..))
-import Veterator.Model.Dungeon (Creatures, DungeonPosition, Items, Tile (..), TileChunk, Tiles, chunkSize, emptyChunkTiles)
+import Veterator.Model.Dungeon (Creatures, DungeonPosition, Items, Tile (..), TileChunk, Tiles, chunkSize, emptyChunkTiles, toTup)
 
 data DungeonGeneration = DungeonGeneration
   { generationTiles :: Tiles,
@@ -48,7 +48,7 @@ generateDungeon = do
   let spawnPositions = emptyChunkTiles (0, 0) initialChunk
   let playerSpawn = head spawnPositions
   playerUUID <- getRandom
-  creatures <- insert playerSpawn (mkPlayer playerUUID) <$> generateCreatures (tail spawnPositions)
+  creatures <- insert (toTup playerSpawn) (mkPlayer playerUUID) <$> generateCreatures (tail spawnPositions)
   pure
     DungeonGeneration
       { generationTiles = withNeighboringChunks,
@@ -72,7 +72,7 @@ genUUIDs = getRandoms
 generateCreatures :: (RandomGen g) => [DungeonPosition] -> Rand g Creatures
 generateCreatures validSpawns = do
   numMonsters <- min (length validSpawns) <$> getRandomR (10 :: Int, 20 :: Int)
-  spawnPositions <- take numMonsters <$> shuffle validSpawns
+  spawnPositions <- take numMonsters <$> shuffle (toTup <$> validSpawns)
   uuids <- genUUIDs
   let goblins = mkGoblin <$> uuids
   pure $

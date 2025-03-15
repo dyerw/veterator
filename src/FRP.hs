@@ -4,7 +4,7 @@
 
 module FRP where
 
-import Control.Arrow (returnA)
+import Control.Arrow (Arrow (arr), returnA, (>>>))
 import Data.Extra.Tuple (toFst)
 import Data.IdentityList (IdentityList)
 import qualified Data.IdentityList as IL
@@ -63,3 +63,6 @@ liveUntil f = proc a -> do
       returnA -< Nothing
     else
       returnA -< Just a
+
+withPrev :: SF (a, Maybe b) b -> SF a b
+withPrev sf = loopPre Nothing (sf >>> arr (\b -> (b, Just b)))

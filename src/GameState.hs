@@ -23,7 +23,7 @@ import Gen.Dungeon
     fillNeighboringChunks,
   )
 import System.Random (StdGen)
-import Veterator.Dir (move)
+import Veterator.Direction (move)
 import Veterator.Events (GameEvent (CreatureDied, CreatureTookDamage, PlayerGainedXP))
 import Veterator.Model.Creature (Creature (..), CreatureAction (..), CreatureStats (statsDamageRange), dealDamage, isAlive)
 import Veterator.Model.Dungeon
@@ -47,22 +47,22 @@ data GameState = GameState
   }
 
 -- Maybe we make this StateT GameState too?
-newtype GameM a = GameM (WriterT [GameEvent] (Rand StdGen) a)
+newtype GameM d a = GameM (WriterT [GameEvent d] (Rand StdGen) a)
   deriving
     ( Functor,
       Applicative,
       Monad,
       MonadRandom,
-      (MonadWriter [GameEvent])
+      (MonadWriter [GameEvent d])
     )
 
-logEvent :: GameEvent -> GameM ()
+logEvent :: GameEvent d -> GameM d ()
 logEvent = tell . pure
 
-logEvents :: [GameEvent] -> GameM ()
+logEvents :: [GameEvent d] -> GameM d ()
 logEvents = tell
 
-runGameM :: GameM a -> (StdGen -> ((a, [GameEvent]), StdGen))
+runGameM :: GameM d a -> (StdGen -> ((a, [GameEvent d]), StdGen))
 runGameM (GameM m) = runIdentity . runRandT (runWriterT m)
 
 getPlayerWithPosition :: GameState -> (DungeonPosition, Creature)
@@ -92,10 +92,10 @@ getMoveResult state destination
     dungeon = stateDungeon state
     creatureAtPos = getCreatureAt dungeon destination
 
-tick :: CreatureAction -> GameState -> GameM GameState
+tick :: CreatureAction -> GameState -> GameM d GameState
 tick command state = applyCommand command state >>= cleanup
 
-applyCommand :: CreatureAction -> GameState -> GameM GameState
+applyCommand :: CreatureAction -> GameState -> GameM d GameState
 applyCommand (Move d) state =
   case getMoveResult state destination of
     Vacant ->
@@ -123,7 +123,7 @@ applyCommand (Attack Creature {creatureId}) state = do
     else
       pure nextState
 
-cleanup :: GameState -> GameM GameState
+cleanup :: GameState -> GameM d GameState
 cleanup state = do
   -- Cleanup dead creatures
   let dungeon = stateDungeon state
@@ -138,12 +138,12 @@ cleanup state = do
 
   pure $ state {stateDungeon = nextDungeon'}
 
-gainXP :: Int -> GameState -> GameM GameState
+gainXP :: Int -> GameState -> GameM d GameState
 gainXP amount state = do
   _ <- logEvent $ PlayerGainedXP amount
   pure $ state {statePlayerXP = statePlayerXP state + amount}
 
-damageCreature :: UUID -> Int -> GameState -> GameM GameState
+damageCreature :: UUID -> Int -> GameState -> GameM d GameState
 damageCreature creatureId amount state = do
   _ <- logEvent $ CreatureTookDamage creatureId amount
   pure $

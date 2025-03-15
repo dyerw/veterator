@@ -1,3 +1,4 @@
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE TupleSections #-}
 
@@ -5,10 +6,12 @@ module Veterator.Model.Dungeon where
 
 import Control.Monad (join)
 import Data.Bifunctor (Bifunctor (bimap))
+import Data.Extra.Tuple (mapFst)
 import Data.Foldable (find)
 import Data.Function ((&))
 import Data.Maybe (fromMaybe)
 import Data.UUID (UUID)
+import Linear (V2 (V2))
 import Math.Geometry.Extra.GridMap (swap)
 import Math.Geometry.Grid (Grid (Index))
 import Math.Geometry.Grid.Octagonal (RectOctGrid, UnboundedOctGrid)
@@ -25,7 +28,13 @@ data Dungeon = Dungeon
 
 -- Dungeon position is in one uninterrupted coordinate space and can be decomposed
 -- into a world position and a chunk position
-type DungeonPosition = Index RectOctGrid
+type DungeonPosition = V2 Int
+
+toTup :: V2 Int -> (Int, Int)
+toTup (V2 x y) = (x, y)
+
+fromTup :: (Int, Int) -> V2 Int
+fromTup (x, y) = V2 x y
 
 -- Chunk position is the coordinate of a tile within a chunk
 type TilePosition = Index RectOctGrid
@@ -46,16 +55,27 @@ chunkToDungeon :: (Int, Int) -> Int
 chunkToDungeon (c, d) = c * chunkSize + d
 
 dungeonPosToTileIndex :: DungeonPosition -> TileIndex
-dungeonPosToTileIndex = (\((cx, dx), (cy, dy)) -> ((cx, cy), (dx, dy))) . bimap dungeonToChunk dungeonToChunk
+dungeonPosToTileIndex =
+  (\((cx, dx), (cy, dy)) -> ((cx, cy), (dx, dy)))
+    . bimap dungeonToChunk dungeonToChunk
+    . toTup
 
 tileIndexToDungeonPos :: TileIndex -> DungeonPosition
-tileIndexToDungeonPos = bimap chunkToDungeon chunkToDungeon . (\((cx, cy), (dx, dy)) -> ((cx, dx), (cy, dy)))
+tileIndexToDungeonPos =
+  fromTup
+    . bimap chunkToDungeon chunkToDungeon
+    . (\((cx, cy), (dx, dy)) -> ((cx, dx), (cy, dy)))
 
 type TileChunk = LGridMap RectOctGrid Tile
 
 type Tiles = LGridMap UnboundedOctGrid TileChunk
 
 data Tile = Floor | Wall | StairUp | StairDown deriving (Eq)
+
+blocksLOS :: Tile -> Bool
+blocksLOS = \case
+  Wall -> True
+  _ -> False
 
 -- Since these are sparsely populated they're indexed by DungeonPosition
 type Creatures = LGridMap UnboundedOctGrid Creature
@@ -101,21 +121,25 @@ getTile pos tiles = tile
 
 -- Return a rectangular slice of the dungeon tiles, errors if ungenerated
 tileSection :: DungeonPosition -> Int -> Int -> Tiles -> [(DungeonPosition, Tile)]
-tileSection (x, y) width height tiles =
+tileSection (V2 x y) width height tiles =
   [ (pos, getTile pos tiles)
     | x' <- [0 .. (width - 1)],
       y' <- [0 .. (height - 1)],
-      let pos = (x + x', y + y')
+      let pos = V2 (x + x') (y + y')
   ]
 
 getAllCreatures :: Dungeon -> [Creature]
 getAllCreatures = GM.elems . dungeonCreatures
 
 getCreatureAt :: Dungeon -> DungeonPosition -> Maybe Creature
-getCreatureAt Dungeon {dungeonCreatures} p = GM.lookup p dungeonCreatures
+getCreatureAt Dungeon {dungeonCreatures} p = GM.lookup (toTup p) dungeonCreatures
 
 getCreatureWithPosition :: Dungeon -> UUID -> Maybe (DungeonPosition, Creature)
-getCreatureWithPosition Dungeon {dungeonCreatures} uuid = find ((== uuid) . creatureId . snd) (toList dungeonCreatures)
+getCreatureWithPosition Dungeon {dungeonCreatures} uuid =
+  mapFst fromTup
+    <$> find
+      ((== uuid) . creatureId . snd)
+      (toList dungeonCreatures)
 
 getCreature :: Dungeon -> UUID -> Maybe Creature
 getCreature d uuid = snd <$> getCreatureWithPosition d uuid
@@ -126,7 +150,7 @@ getCreaturePosition d uuid = fst <$> getCreatureWithPosition d uuid
 updateCreature :: Dungeon -> UUID -> (Creature -> Creature) -> Dungeon
 updateCreature d uuid f =
   d
-    { dungeonCreatures = maybe creatures (\p -> GM.adjust f p creatures) position
+    { dungeonCreatures = maybe creatures (\p -> GM.adjust f (toTup p) creatures) position
     }
   where
     creatures = dungeonCreatures d
@@ -138,7 +162,14 @@ moveCreature d uuid destination =
   case getCreatureWithPosition d uuid of
     Just (origin, _) -> case getCreatureAt d destination of
       Just _ -> d
-      Nothing -> d {dungeonCreatures = swap destination origin (dungeonCreatures d)}
+      Nothing ->
+        d
+          { dungeonCreatures =
+              swap
+                (toTup destination)
+                (toTup origin)
+                (dungeonCreatures d)
+          }
     Nothing -> d
 
 -- FIXME: Ok now we're really asking for a State monad

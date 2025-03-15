@@ -3,7 +3,7 @@
 module Veterator.Model.Creature where
 
 import Data.UUID (UUID)
-import Veterator.Dir (Dir)
+import Veterator.Direction (Compass)
 
 data CreatureType = Adventurer | Goblin deriving (Show)
 
@@ -31,4 +31,4 @@ dealDamage i c = c {creatureHealth = creatureHealth c - i}
 
 data CreatureStats = CreatureStats {statsMaxHealth :: Int, statsDamageRange :: (Int, Int)} deriving (Show)
 
-data CreatureAction = Move Dir | Attack Creature
+data CreatureAction = Move Compass | Attack Creature

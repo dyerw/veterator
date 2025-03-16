@@ -20,3 +20,7 @@ both f (x, y) = (f x, f y)
 
 tupLift :: (a -> b -> c) -> (a, a) -> (b, b) -> (c, c)
 tupLift f (a1, a2) (b1, b2) = (f a1 b1, f a2 b2)
+
+maybeSnd :: (a, Maybe b) -> Maybe (a, b)
+maybeSnd (a, Just b) = Just (a, b)
+maybeSnd (_, Nothing) = Nothing

@@ -9,15 +9,17 @@ import Data.Bifunctor (Bifunctor (bimap))
 import Data.Extra.Tuple (mapFst)
 import Data.Foldable (find)
 import Data.Function ((&))
+import Data.Functor (($>))
 import Data.Maybe (fromMaybe)
 import Data.UUID (UUID)
-import Linear (V2 (V2))
+import Linear (Additive ((^-^)), V2 (V2))
 import Math.Geometry.Extra.GridMap (swap)
 import Math.Geometry.Grid (Grid (Index))
-import Math.Geometry.Grid.Octagonal (RectOctGrid, UnboundedOctGrid)
+import Math.Geometry.Grid.Octagonal (RectOctGrid, UnboundedOctGrid, rectOctGrid)
 import Math.Geometry.GridMap (GridMap (toList))
 import qualified Math.Geometry.GridMap as GM
-import Math.Geometry.GridMap.Lazy (LGridMap)
+import Math.Geometry.GridMap.Lazy (LGridMap, lazyGridMapIndexed)
+import Veterator.Algorithm (Blocked (Blocked), raycastFOV)
 import Veterator.Model.Creature (Creature (creatureId), Item, isAlive)
 
 data Dungeon = Dungeon
@@ -67,6 +69,9 @@ tileIndexToDungeonPos =
     . (\((cx, cy), (dx, dy)) -> ((cx, dx), (cy, dy)))
 
 type TileChunk = LGridMap RectOctGrid Tile
+
+-- A TileSlice can cross chunk boundaries and be any width or height
+type TileSlice = TileChunk
 
 type Tiles = LGridMap UnboundedOctGrid TileChunk
 
@@ -128,6 +133,9 @@ tileSection (V2 x y) width height tiles =
       let pos = V2 (x + x') (y + y')
   ]
 
+tileSlice :: DungeonPosition -> Int -> Int -> Tiles -> TileSlice
+tileSlice pos w h tiles = lazyGridMapIndexed (rectOctGrid w h) (mapFst toTup <$> tileSection pos w h tiles)
+
 getAllCreatures :: Dungeon -> [Creature]
 getAllCreatures = GM.elems . dungeonCreatures
 
@@ -178,3 +186,16 @@ removeDeadCreatures dungeon =
   let creatures = dungeonCreatures dungeon
       nextCreatures = GM.filter isAlive creatures
    in (filter (not . isAlive) (GM.elems creatures), dungeon {dungeonCreatures = nextCreatures})
+
+tilesVisibleFromPosition :: Dungeon -> DungeonPosition -> Int -> [DungeonPosition]
+tilesVisibleFromPosition d pos dist = fromTup <$> GM.keys visibilityMap
+  where
+    topLeftOfSlice = pos ^-^ V2 (div dist 2) (div dist 2)
+    slice = tileSlice topLeftOfSlice dist dist (dungeonTiles d)
+    blockedMap = GM.filter blocksLOS slice $> Blocked
+    visibilityMap = raycastFOV blockedMap pos dist
+
+tilesVisibleToCreature :: Dungeon -> UUID -> Int -> [DungeonPosition]
+tilesVisibleToCreature d uuid dist = case getCreaturePosition d uuid of
+  Just position -> tilesVisibleFromPosition d position dist
+  Nothing -> []

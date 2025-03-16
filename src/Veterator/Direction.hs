@@ -18,9 +18,9 @@ data Cardinal = N | E | S | W deriving (Show, Eq)
 instance Direction Cardinal where
   toVec :: Cardinal -> V2 Int
   toVec N = V2 0 (-1)
-  toVec W = perp $ toVec N
-  toVec S = perp $ toVec W
-  toVec E = perp $ toVec S
+  toVec E = perp $ toVec N
+  toVec S = perp $ toVec E
+  toVec W = perp $ toVec S
 
 data Ordinal = NW | NE | SW | SE deriving (Show, Eq)
 
@@ -65,6 +65,9 @@ pattern South = Cardinal S
 northeast :: Compass
 northeast = Ordinal NE
 
+pattern Northeast :: Compass
+pattern Northeast = Ordinal NE
+
 northwest :: Compass
 northwest = Ordinal NW
 
@@ -79,3 +82,6 @@ allCardinals = [N, E, S, W]
 
 allOrdinals :: [Ordinal]
 allOrdinals = [NE, SE, SW, NW]
+
+allCompass :: [Compass]
+allCompass = (Cardinal <$> allCardinals) <> (Ordinal <$> allOrdinals)

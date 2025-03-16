@@ -3,15 +3,25 @@
 module Veterator.AlgorithmSpec (spec) where
 
 import Control.Monad (forM_)
-import Data.List (intercalate)
+import Data.List (sort)
+import Data.Maybe (fromMaybe)
 import qualified Hedgehog.Gen as Gen
 import qualified Hedgehog.Range as Range
-import Math.Geometry.Grid (Grid (neighbours))
+import Linear (V2 (V2))
+import qualified Math.Geometry.Extra.GridMap as GME
+import Math.Geometry.Grid (Grid (neighbours), size)
 import Math.Geometry.Grid.Octagonal (UnboundedOctGrid (UnboundedOctGrid), rectOctGrid)
+import qualified Math.Geometry.GridMap as GM
 import Math.Geometry.GridMap.Lazy (LGridMap, lazyGridMapIndexed)
 import Test.Hspec
 import Test.Hspec.Hedgehog
-import Veterator.Algorithm (Blocked (Blocked), Visibility (..), findPathGDFS, isVisible, shadowCastOctant)
+import Veterator.Algorithm
+  ( Blocked (Blocked),
+    Visibility (..),
+    boundingBox,
+    findPathGDFS,
+    raycastFOV,
+  )
 
 emptyGridMap :: LGridMap UnboundedOctGrid v
 emptyGridMap = lazyGridMapIndexed UnboundedOctGrid []
@@ -66,68 +76,146 @@ spec = describe "Veterator.Algorithm" $ do
       let path = findPathGDFS gm from to
       path `shouldBe` [(1, 8), (2, 7), (3, 6), (3, 5), (4, 4), (5, 5), (6, 6), (7, 7), (8, 8), (7, 9)]
 
-  describe "recursiveShadowCastFOV" $ do
-    let asciiVisibilityOctant oct =
-          intercalate "\n" $
-            reverse $
-              fmap (\v -> if isVisible v then '.' else 'X') <$> oct
+  describe "raycastFOV" $ do
+    describe "boundingBox" $ do
+      it "draws a bounding box around the origin" $ do
+        let box = boundingBox (V2 0 0) 1
+        sort box `shouldBe` sort [V2 (-1) (-1), V2 0 (-1), V2 1 (-1), V2 1 0, V2 1 1, V2 0 1, V2 (-1) 1, V2 (-1) 0]
 
-    describe "shadowCastOctant" $ do
-      it "returns an entirely unblocked octant as entirely visible" $ do
-        let octant =
-              [ [Nothing],
-                [Nothing, Nothing],
-                [Nothing, Nothing, Nothing],
-                [Nothing, Nothing, Nothing, Nothing]
-              ]
+    it "my debug functions make sense" $ do
+      let ascii =
+            "123\n"
+              ++ "456\n"
+              ++ "789"
+      GME.toAscii (fromMaybe ' ') (GME.fromAscii Just ascii) `shouldBe` ascii
 
-        let result =
-              [ [Visible],
-                [Visible, Visible],
-                [Visible, Visible, Visible],
-                [Visible, Visible, Visible, Visible]
-              ]
-        shadowCastOctant octant `shouldBe` result
+    it "can see with no blockers the correct range" $ do
+      let blockers =
+            "...........\n"
+              ++ "...........\n"
+              ++ "...........\n"
+              ++ "...........\n"
+              ++ "...........\n"
+              ++ ".....@.....\n"
+              ++ "...........\n"
+              ++ "...........\n"
+              ++ "...........\n"
+              ++ "...........\n"
+              ++ "..........."
+      let visibility =
+            "XXXXXXXXXXX\n"
+              ++ "XXXXX.XXXXX\n"
+              ++ "XXX.....XXX\n"
+              ++ "XX.......XX\n"
+              ++ "XX.......XX\n"
+              ++ "X.........X\n"
+              ++ "XX.......XX\n"
+              ++ "XX.......XX\n"
+              ++ "XXX.....XXX\n"
+              ++ "XXXXX.XXXXX\n"
+              ++ "XXXXXXXXXXX"
 
-      it "returns entirely blocked octant as entirey obstructed, except origin" $ do
-        let octant =
-              [ [Just Blocked],
-                [Just Blocked, Just Blocked],
-                [Just Blocked, Just Blocked, Just Blocked],
-                [Just Blocked, Just Blocked, Just Blocked, Just Blocked]
-              ]
-        let result =
-              [ [Visible],
-                [Obstructed, Obstructed],
-                [Obstructed, Obstructed, Obstructed],
-                [Obstructed, Obstructed, Obstructed, Obstructed]
-              ]
-        shadowCastOctant octant `shouldBe` result
+      let blockedGM = GME.fromAscii cToBlocked blockers
+      let visibilityGM = raycastFOV blockedGM (V2 5 5) 4
+      size (GM.toGrid visibilityGM) `shouldBe` size (GM.toGrid blockedGM)
+      GME.toAscii visibilityToC visibilityGM `shouldBe` visibility
 
-    it "unblocked walls are visible" $ do
-      let octant = [[Nothing], [Just Blocked, Nothing]]
-      let result = [[Visible], [Visible, Visible]]
-      asciiVisibilityOctant (shadowCastOctant octant) `shouldBe` asciiVisibilityOctant result
+    it "can see the entire map" $ do
+      let blockers =
+            "...........\n"
+              ++ "...........\n"
+              ++ "...........\n"
+              ++ "...........\n"
+              ++ "...........\n"
+              ++ ".....@.....\n"
+              ++ "...........\n"
+              ++ "...........\n"
+              ++ "...........\n"
+              ++ "...........\n"
+              ++ "..........."
+      let visibility =
+            "...........\n"
+              ++ "...........\n"
+              ++ "...........\n"
+              ++ "...........\n"
+              ++ "...........\n"
+              ++ "...........\n"
+              ++ "...........\n"
+              ++ "...........\n"
+              ++ "...........\n"
+              ++ "...........\n"
+              ++ "..........."
 
-    it "a single blocked tile directly in front casts an 1/2 sloped shadow" $ do
-      let octant =
-            [ [Nothing],
-              [Just Blocked, Nothing],
-              replicate 3 Nothing,
-              replicate 4 Nothing,
-              replicate 5 Nothing,
-              replicate 6 Nothing,
-              replicate 7 Nothing,
-              replicate 8 Nothing
-            ]
-      let result =
-            [ [Visible],
-              [Visible, Visible],
-              [Obstructed] <> replicate 2 Visible,
-              replicate 2 Obstructed <> replicate 2 Visible,
-              replicate 2 Obstructed <> replicate 3 Visible,
-              replicate 3 Obstructed <> replicate 3 Visible,
-              replicate 3 Obstructed <> replicate 4 Visible,
-              replicate 4 Obstructed <> replicate 4 Visible
-            ]
-      asciiVisibilityOctant (shadowCastOctant octant) `shouldBe` asciiVisibilityOctant result
+      let blockedGM = GME.fromAscii cToBlocked blockers
+      let visibilityGM = raycastFOV blockedGM (V2 5 5) 20
+      size (GM.toGrid visibilityGM) `shouldBe` size (GM.toGrid blockedGM)
+      GME.toAscii visibilityToC visibilityGM `shouldBe` visibility
+
+    it "casts a vertical shadow" $ do
+      let blockers =
+            "...........\n"
+              ++ "...........\n"
+              ++ "...........\n"
+              ++ "...........\n"
+              ++ ".....O.....\n"
+              ++ ".....@.....\n"
+              ++ "...........\n"
+              ++ "...........\n"
+              ++ "...........\n"
+              ++ "...........\n"
+              ++ "..........."
+      let visibility =
+            "...XXXXX...\n"
+              ++ "....XXX....\n"
+              ++ ".....X.....\n"
+              ++ ".....X.....\n"
+              ++ "...........\n"
+              ++ "...........\n"
+              ++ "...........\n"
+              ++ "...........\n"
+              ++ "...........\n"
+              ++ "...........\n"
+              ++ "..........."
+
+      let blockedGM = GME.fromAscii cToBlocked blockers
+      let visibilityGM = raycastFOV blockedGM (V2 5 5) 20
+      size (GM.toGrid visibilityGM) `shouldBe` size (GM.toGrid blockedGM)
+      GME.toAscii visibilityToC visibilityGM `shouldBe` visibility
+  it "can't see through walls" $ do
+    let blockers =
+          "...........\n"
+            ++ "...........\n"
+            ++ "...........\n"
+            ++ "...........\n"
+            ++ "OOOOOOOO...\n"
+            ++ ".....@.O...\n"
+            ++ ".......OOOO\n"
+            ++ "...........\n"
+            ++ "...........\n"
+            ++ "...........\n"
+            ++ "..........."
+    let visibility =
+          "XXXXXXXXXXX\n"
+            ++ "XXXXXXXXXXX\n"
+            ++ "XXXXXXXXXXX\n"
+            ++ "XXXXXXXXXXX\n"
+            ++ "........XXX\n"
+            ++ "........XXX\n"
+            ++ "........XXX\n"
+            ++ ".........XX\n"
+            ++ "..........X\n"
+            ++ "...........\n"
+            ++ "..........."
+
+    let blockedGM = GME.fromAscii cToBlocked blockers
+    let visibilityGM = raycastFOV blockedGM (V2 5 5) 20
+    size (GM.toGrid visibilityGM) `shouldBe` size (GM.toGrid blockedGM)
+    GME.toAscii visibilityToC visibilityGM `shouldBe` visibility
+  where
+    cToBlocked :: Char -> Maybe Blocked
+    cToBlocked 'O' = Just Blocked
+    cToBlocked _ = Nothing
+
+    visibilityToC :: Maybe Visibility -> Char
+    visibilityToC (Just Visible) = '.'
+    visibilityToC Nothing = 'X'

@@ -5,27 +5,25 @@
 module Veterator.Algorithm where
 
 import Control.Applicative (liftA2)
-import Control.Monad (forM)
-import Control.Monad.Random (when)
-import Control.Monad.State (State, evalState, gets, modify)
+import Data.Extra.List (takeUntil)
 import Data.Extra.Tuple (toFst)
-import qualified Data.IntervalSet as IS
 import Data.Map (Map, member, (!))
 import qualified Data.Map as M
-import Data.Maybe (isJust)
 import Data.PQueue.Prio.Min (MinPQueue (..))
 import qualified Data.PQueue.Prio.Min as PQ
-import Linear (V2 (V2))
+import Linear (Additive ((^+^)), V2 (V2))
+import Math.Geometry.Extra.GridMap (vecToKey)
 import Math.Geometry.Grid (Index, distance, neighbours)
 import Math.Geometry.Grid.Octagonal (RectOctGrid)
 import Math.Geometry.GridMap (GridMap (BaseGrid, toGrid))
 import qualified Math.Geometry.GridMap as GM
+import Math.Geometry.GridMap.Lazy (lazyGridMap)
 import qualified Math.Geometry.GridMap.Lazy as LGM
 
 (&&&) :: (a -> Bool) -> (a -> Bool) -> (a -> Bool)
 (&&&) = liftA2 (&&)
 
-data Blocked = Blocked deriving (Show)
+data Blocked = Blocked deriving (Eq, Show)
 
 isUnblocked :: forall gm k. (GridMap gm Blocked, k ~ Index (BaseGrid gm Blocked), Ord k) => gm Blocked -> k -> Bool
 isUnblocked gm k = case GM.lookup k gm of
@@ -78,56 +76,48 @@ findPathGDFS gm from to =
     withDistance :: [k] -> [(Int, k)]
     withDistance = (fmap . toFst) (distance (toGrid gm) to)
 
-data Visibility = Visible | Obstructed deriving (Show, Eq)
+data Visibility = Visible deriving (Show, Eq)
 
-isVisible :: Visibility -> Bool
-isVisible Visible = True
-isVisible _ = False
+boundingBox :: V2 Int -> Int -> [V2 Int]
+boundingBox p d =
+  (^+^) p
+    <$> ( [V2 x y | x <- [(-d) .. d], y <- [-d, d]] -- Top and bottom
+            <> [V2 x y | y <- [(-d + 1) .. d - 1], x <- [-d, d]] -- Sides
+        )
 
-type Shadow = IS.Interval Double
+line :: V2 Int -> V2 Int -> [V2 Int]
+line (V2 startX startY) (V2 endX endY) =
+  let dx = endX - startX
+      dy = endY - startY
+      step = max (abs dx) (abs dy)
+      stepX = (fromIntegral dx / fromIntegral step) :: Double
+      stepY = (fromIntegral dy / fromIntegral step) :: Double
+   in [ V2 x y
+        | i <- [0 .. (step + 1)],
+          let x = round (fromIntegral startX + fromIntegral i * stepX),
+          let y = round (fromIntegral startY + fromIntegral i * stepY)
+      ]
 
-type Shadows = IS.IntervalSet Double
-
-projectTile :: V2 Int -> Shadow
-projectTile (V2 row col) =
-  IS.Interval
-    (fromIntegral col / fromIntegral (row + 2))
-    (fromIntegral (col + 1) / fromIntegral (row + 1))
-
-tileVisibility :: V2 Int -> Shadows -> Visibility
-tileVisibility t shadows = if shadows `IS.subsumes` projectTile t then Obstructed else Visible
-
-shadowCastTile :: V2 Int -> Maybe Blocked -> State Shadows Visibility
-shadowCastTile tile block = do
-  visibility <- gets (tileVisibility tile) -- before updating shadows
-  when
-    (isJust block)
-    (modify (`IS.insert` projectTile tile))
-  pure visibility
-
-shadowCastRow :: Int -> [Maybe Blocked] -> State Shadows [Visibility]
-shadowCastRow row blocks = do
-  forM (zip [0 ..] blocks) (\(col, bs) -> shadowCastTile (V2 row col) bs)
-
-shadowCastOctant :: [[Maybe Blocked]] -> [[Visibility]]
-shadowCastOctant blocks = evalState shadowCastOctantM IS.empty
+euclideanDistance :: V2 Int -> V2 Int -> Double
+euclideanDistance (V2 x0 y0) (V2 x1 y1) =
+  sqrt
+    ( sq (fromIntegral x1 - fromIntegral x0)
+        + sq (fromIntegral y1 - fromIntegral y0)
+    )
   where
-    shadowCastOctantM = do
-      forM (zip [0 ..] blocks) (uncurry shadowCastRow)
+    sq n = n * n
 
-recursiveShadowCastFOV :: LGM.LGridMap RectOctGrid Blocked -> V2 Int -> Int -> LGM.LGridMap RectOctGrid Visibility
-recursiveShadowCastFOV gm (V2 viewerX viewerY) dist = insertVisibilities $ Obstructed <$ gm
+castLight :: V2 Int -> (V2 Int -> Bool) -> Int -> [V2 Int]
+castLight source blocking radius = filter inRadius $ rays >>= takeUntil blocking
   where
-    octantPositions = [[(row + viewerX, col + viewerY) | col <- [0 .. row]] | row <- [0 .. dist]]
-    blockedOctant = fmap (`GM.lookup` gm) <$> octantPositions
-    octantShadows = shadowCastOctant blockedOctant
+    rays = line source <$> boundingBox source radius
+    inRadius t = fromIntegral radius >= euclideanDistance source t
 
-    insertVisibilities :: LGM.LGridMap RectOctGrid Visibility -> LGM.LGridMap RectOctGrid Visibility
-    insertVisibilities =
-      foldr
-        (.)
-        id
-        [ GM.insert (row + viewerX, col + viewerY) v
-          | (row, vs) <- zip [0 ..] octantShadows,
-            (col, v) <- zip [0 ..] vs
-        ]
+raycastFOV :: LGM.LGridMap RectOctGrid Blocked -> V2 Int -> Int -> LGM.LGridMap RectOctGrid Visibility
+raycastFOV gm source range =
+  foldr
+    (\(V2 x y) gm' -> GM.insert (x, y) Visible gm')
+    (lazyGridMap (toGrid gm) [])
+    visibleTiles
+  where
+    visibleTiles = castLight source (isBlocked gm . vecToKey) range

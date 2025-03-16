@@ -1,12 +1,12 @@
 module Display where
 
 import Control.Monad (forM_)
-import Display.View (AbsoluteView, Primitive (..), Px, TextAlignment (..))
+import Display.View (AbsoluteView, Color (Color), Primitive (..), Px, TextAlignment (..))
 import Foreign.C (CInt (..))
 import Linear (V2 (V2), V4 (V4))
 import Linear.Affine (Point (P))
 import Resources (Image (imageTexture), Resources (cozetteFont), getImage)
-import SDL (WindowConfig (..))
+import SDL (WindowConfig (..), ($=))
 import qualified SDL
 import qualified SDL.Font as Font
 
@@ -27,6 +27,9 @@ render res renderer view = do
   SDL.clear renderer
   forM_ view (renderPrimitive res renderer)
   SDL.present renderer
+
+fi :: (Integral a, Num b) => a -> b
+fi = fromIntegral
 
 renderPrimitive :: Resources -> SDL.Renderer -> (Px, Primitive) -> IO ()
 renderPrimitive res renderer (V2 x y, prim) = case prim of
@@ -57,8 +60,15 @@ renderPrimitive res renderer (V2 x y, prim) = case prim of
         Nothing -- entire Texture
         (Just $ renderRect x y (16 :: Int) (16 :: Int))
     pure ()
+  RectPrim (V2 width height) (Color r g b a) -> do
+    SDL.rendererDrawColor renderer $= V4 (fi r) (fi g) (fi b) (fi a)
+    _ <-
+      SDL.fillRect
+        renderer
+        (Just $ renderRect x y width height)
+    pure ()
   where
     renderRect x' y' width height =
       SDL.Rectangle
-        (P (V2 (CInt (fromIntegral x')) (CInt (fromIntegral y'))))
-        (V2 (fromIntegral width) (fromIntegral height))
+        (P (V2 (CInt (fi x')) (CInt (fi y'))))
+        (V2 (fi width) (fi height))

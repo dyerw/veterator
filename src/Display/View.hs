@@ -17,18 +17,30 @@ data TextAlignment = LeftAligned | RightAligned | Centered deriving (Show)
 
 data Side = TopSide | BottomSide | LeftSide | RightSide deriving (Show)
 
+type Size = V2 Int
+
+data Color = Color Int Int Int Int deriving (Show)
+
+black :: Color
+black = Color 0 0 255 255
+
 data View
   = Group [View]
   | Translate Px View
   | Sprite ImageKey
   | Label TextAlignment Text
+  | Rect Size Color
   | -- These are all absolute to the screen and reset the translation context
     CenterX View
   | CenterY View
   | From Side Int View
   deriving (Show)
 
-data Primitive = SpritePrim ImageKey | TextPrim TextAlignment Text deriving (Show)
+data Primitive
+  = SpritePrim ImageKey
+  | TextPrim TextAlignment Text
+  | RectPrim Size Color
+  deriving (Show)
 
 -- An AbsoluteView is an ordered list of primitives paired with their
 -- position in terms of world space
@@ -43,6 +55,7 @@ layout view Camera {cameraTranslation, cameraSize = (V2 cameraWidth cameraHeight
       Translate translate v -> layout' (offset + translate) acc v
       Sprite imgKey -> (offset, SpritePrim imgKey) : acc
       Label a t -> (offset, TextPrim a t) : acc
+      Rect s c -> (offset, RectPrim s c) : acc
       -- These reset the offset of the affected coordinate
       CenterX v -> layout' (px (div cameraWidth 2) (pxY offset)) acc v
       CenterY v -> layout' (px (pxX offset) (div cameraHeight 2)) acc v

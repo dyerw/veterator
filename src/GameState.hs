@@ -22,6 +22,7 @@ import Gen.Dungeon
       ),
     fillNeighboringChunks,
   )
+import Linear (V2)
 import System.Random (StdGen)
 import Veterator.Direction (move)
 import Veterator.Events (GameEvent (CreatureDied, CreatureTookDamage, PlayerGainedXP))
@@ -37,11 +38,14 @@ import Veterator.Model.Dungeon
     isEmpty,
     moveCreature,
     removeDeadCreatures,
+    tilesVisibleToCreature,
     updateCreature,
   )
 
 data GameState = GameState
   { stateDungeon :: Dungeon,
+    stateVisibleTiles :: [V2 Int],
+    stateExploredTiles :: [V2 Int],
     statePlayerUUID :: UUID,
     statePlayerXP :: Int
   }
@@ -164,12 +168,17 @@ initialGameState
       generationItems
     } =
     GameState
-      { stateDungeon =
-          Dungeon
-            { dungeonTiles = generationTiles,
-              dungeonCreatures = generationCreatures,
-              dungeonItems = generationItems
-            },
+      { stateDungeon = dungeon,
         statePlayerUUID = generationPlayerUUID,
-        statePlayerXP = 0
+        statePlayerXP = 0,
+        stateVisibleTiles = visibleTiles,
+        stateExploredTiles = visibleTiles
       }
+    where
+      dungeon =
+        Dungeon
+          { dungeonTiles = generationTiles,
+            dungeonCreatures = generationCreatures,
+            dungeonItems = generationItems
+          }
+      visibleTiles = tilesVisibleToCreature dungeon generationPlayerUUID 10

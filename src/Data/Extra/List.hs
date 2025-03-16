@@ -31,3 +31,8 @@ shuffle xs = do
           MV.write mvec i vj
         freeze mvec
   pure $ toList vec
+
+-- like takeWhile but inclusive and inverted
+takeUntil :: (a -> Bool) -> [a] -> [a]
+takeUntil _ [] = []
+takeUntil f (h : t) = h : if f h then [] else takeUntil f t

@@ -10,6 +10,9 @@ data ImageKey
   | WallTileImage
   | FloorTileImage
   | GoblinImage
+  | TilesSpriteSheet
+  | RoguesSpriteSheet
+  | MonstersSpriteSheet
   deriving (Show)
 
 data Resources = Resources
@@ -17,6 +20,9 @@ data Resources = Resources
     wallTileImage :: Image,
     floorTileImage :: Image,
     goblinImage :: Image,
+    tilesSpriteSheet :: Image,
+    roguesSpriteSheet :: Image,
+    monstersSpriteSheet :: Image,
     cozetteFont :: Font
   }
 
@@ -28,6 +34,9 @@ loadResources renderer = do
   floorTexture <- loadTexture renderer "data/images/floor.png"
   wallTexture <- loadTexture renderer "data/images/wall.png"
   goblinTexture <- loadTexture renderer "data/images/goblin.png"
+  tilesTexture <- loadTexture renderer "data/images/32rogues/tiles.png"
+  roguesTexture <- loadTexture renderer "data/images/32rogues/rogues.png"
+  monstersTexture <- loadTexture renderer "data/images/32rogues/monsters.png"
   cozetteFont' <- Font.load "data/fonts/CozetteVector.ttf" 16
   pure $
     Resources
@@ -35,6 +44,9 @@ loadResources renderer = do
         floorTileImage = Image floorTexture,
         wallTileImage = Image wallTexture,
         goblinImage = Image goblinTexture,
+        tilesSpriteSheet = Image tilesTexture,
+        roguesSpriteSheet = Image roguesTexture,
+        monstersSpriteSheet = Image monstersTexture,
         cozetteFont = cozetteFont'
       }
 
@@ -43,3 +55,6 @@ getImage PlayerImage = playerImage
 getImage WallTileImage = wallTileImage
 getImage FloorTileImage = floorTileImage
 getImage GoblinImage = goblinImage
+getImage TilesSpriteSheet = tilesSpriteSheet
+getImage RoguesSpriteSheet = roguesSpriteSheet
+getImage MonstersSpriteSheet = monstersSpriteSheet

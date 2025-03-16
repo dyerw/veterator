@@ -3,6 +3,7 @@
 
 module Math.Geometry.Extra.GridMap where
 
+import Data.Bifunctor (Bifunctor (second))
 import Data.Extra.Tuple (mapFst, maybeSnd)
 import Data.Function ((&))
 import Data.List (intercalate)
@@ -51,3 +52,6 @@ fromAscii cToV s =
       h = length asciiArray
       w = length $ unpack $ fst $ head asciiArray
    in lazyGridMapIndexed (rectOctGrid w h) indexed
+
+posMap :: (a -> b) -> LGridMap RectOctGrid a -> LGridMap RectOctGrid b
+posMap f gm = gm & GM.toList & fmap (second f) & lazyGridMapIndexed (GM.toGrid gm)

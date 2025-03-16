@@ -8,16 +8,19 @@ module Veterator.Views where
 import Control.Arrow (Arrow (arr), returnA, (>>>))
 import qualified Data.Bifunctor as Bi
 import Data.Extra.Tuple (mapSnd)
-import Data.List ((\\))
 import Data.Maybe (mapMaybe)
+import qualified Data.Set as Set
 import Data.Text (pack)
 import Display.View
-  ( Side (BottomSide),
+  ( Color,
+    Side (BottomSide),
+    SpriteSheet (SpriteSheet),
     TextAlignment (Centered),
     View (..),
     black,
     empty,
     gridSF,
+    setOpacity,
     sparseGridLayout,
   )
 import FRP (andDespawnAfterSecs, spawning)
@@ -28,7 +31,7 @@ import Math.Geometry.GridMap (GridMap (..))
 import Resources (ImageKey (..))
 import Veterator.Events (GameEvent (..))
 import Veterator.Model.Creature (Creature (..), CreatureType (..))
-import Veterator.Model.Dungeon (Dungeon (..), DungeonPosition, Tile (..), fromTup, tileSection, tilesVisibleToCreature)
+import Veterator.Model.Dungeon (Dungeon (..), DungeonPosition, Tile (..), fromTup, tileSection)
 
 rootView :: SF (GameState, [GameEvent d]) View
 rootView = proc (state, events) -> do
@@ -56,6 +59,9 @@ renderedTiles state =
         renderedTileSectionSize
         ((dungeonTiles . stateDungeon) state)
 
+tileSize :: Int
+tileSize = 32
+
 worldView :: SF (GameState, [GameEvent d]) View
 worldView = proc (state, events) -> do
   cv <- creaturesView -< (state, events)
@@ -68,20 +74,32 @@ creaturesView :: SF (GameState, [GameEvent d]) View
 creaturesView = proc (state, events) -> do
   let dungeon = stateDungeon state
   let creatures = Bi.bimap fromTup (,events) <$> toList (dungeonCreatures dungeon)
-  view <- gridSF 16 16 (creatureId . fst) creatureView -< creatures
+  view <- gridSF tileSize tileSize (creatureId . fst) creatureView -< creatures
   returnA -< view
 
 fogOfWarView :: SF ([(DungeonPosition, Tile)], GameState) View
 fogOfWarView =
   arr
     ( \(tiles, state) ->
-        let visibleTiles = tilesVisibleToCreature (stateDungeon state) (statePlayerUUID state) 20
-            fowTiles = (fst <$> tiles) \\ visibleTiles
-         in sparseGridLayout 16 16 $ (,Rect (V2 16 16) black) <$> fowTiles
+        let renderedTileSet = Set.fromList $ fst <$> tiles
+            unexploredTiles = Set.toList $ Set.difference renderedTileSet (stateExploredTiles state)
+            outOfSightExploredTiles =
+              Set.intersection
+                renderedTileSet
+                $ Set.difference (stateExploredTiles state) (stateVisibleTiles state)
+            unexploredView = sparseGridLayout tileSize tileSize $ (,tileRect black) <$> unexploredTiles
+            outOfSightExploredView =
+              sparseGridLayout tileSize tileSize $
+                (,tileRect (setOpacity black 0.5))
+                  <$> Set.toList outOfSightExploredTiles
+         in Group [unexploredView, outOfSightExploredView]
     )
 
+tileRect :: Color -> View
+tileRect = Rect (V2 tileSize tileSize)
+
 tilesView :: [(DungeonPosition, Tile)] -> View
-tilesView tiles = sparseGridLayout 16 16 (mapSnd tileView <$> tiles)
+tilesView tiles = sparseGridLayout tileSize tileSize (mapSnd tileView <$> tiles)
 
 animate :: Double -> Double -> SF View View
 animate dx dy = proc view -> do
@@ -114,13 +132,25 @@ creatureView = proc (Creature {creatureId, creatureType}, events) -> do
   damageNumbers <- spawning floatingDamageNumber -< ((), damageTaken)
 
   let sprite = case creatureType of
-        Adventurer -> Sprite PlayerImage
-        Goblin -> Sprite GoblinImage
+        Adventurer -> adventurerSprite
+        Goblin -> goblinSprite
   returnA -< Group (sprite : damageNumbers)
+
+goblinSprite :: View
+goblinSprite = SheetSprite 7 0 (SpriteSheet 32 32 MonstersSpriteSheet)
+
+adventurerSprite :: View
+adventurerSprite = SheetSprite 0 1 (SpriteSheet 32 32 RoguesSpriteSheet)
 
 tileView :: Tile -> View
 tileView tile =
   case tile of
-    Floor -> Sprite FloorTileImage
-    Wall -> Sprite WallTileImage
+    Floor -> floorSprite
+    Wall -> wallSprite
     _ -> empty
+
+floorSprite :: View
+floorSprite = SheetSprite 0 7 (SpriteSheet 32 32 TilesSpriteSheet)
+
+wallSprite :: View
+wallSprite = SheetSprite 0 1 (SpriteSheet 32 32 TilesSpriteSheet)

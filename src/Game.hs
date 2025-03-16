@@ -77,7 +77,7 @@ followsPlayer =
     ( \(state, windowSize) ->
         -- FIXME: Get a handle on coordinate transformations
         let playerTilePos = getPlayerPosition state
-            playerPxPos = (* (-16)) <$> playerTilePos
+            playerPxPos = (* (-32)) <$> playerTilePos
             halfWindowOffset = ((`div` 2) <$> windowSize)
          in Camera (playerPxPos + halfWindowOffset) 1 windowSize
     )

@@ -9,11 +9,10 @@ import Data.Bifunctor (Bifunctor (bimap))
 import Data.Extra.Tuple (mapFst)
 import Data.Foldable (find)
 import Data.Function ((&))
-import Data.Functor (($>))
 import Data.Maybe (fromMaybe)
 import Data.UUID (UUID)
-import Linear (Additive ((^-^)), V2 (V2))
-import Math.Geometry.Extra.GridMap (swap)
+import Linear (Additive ((^+^), (^-^)), V2 (V2))
+import Math.Geometry.Extra.GridMap (posMap, swap)
 import Math.Geometry.Grid (Grid (Index))
 import Math.Geometry.Grid.Octagonal (RectOctGrid, UnboundedOctGrid, rectOctGrid)
 import Math.Geometry.GridMap (GridMap (toList))
@@ -133,8 +132,12 @@ tileSection (V2 x y) width height tiles =
       let pos = V2 (x + x') (y + y')
   ]
 
+-- Returned with pos at (0, 0)
 tileSlice :: DungeonPosition -> Int -> Int -> Tiles -> TileSlice
-tileSlice pos w h tiles = lazyGridMapIndexed (rectOctGrid w h) (mapFst toTup <$> tileSection pos w h tiles)
+tileSlice pos w h tiles =
+  lazyGridMapIndexed
+    (rectOctGrid w h)
+    (mapFst (toTup . (^-^ pos)) <$> tileSection pos w h tiles)
 
 getAllCreatures :: Dungeon -> [Creature]
 getAllCreatures = GM.elems . dungeonCreatures
@@ -188,14 +191,17 @@ removeDeadCreatures dungeon =
    in (filter (not . isAlive) (GM.elems creatures), dungeon {dungeonCreatures = nextCreatures})
 
 tilesVisibleFromPosition :: Dungeon -> DungeonPosition -> Int -> [DungeonPosition]
-tilesVisibleFromPosition d pos dist = fromTup <$> GM.keys visibilityMap
+tilesVisibleFromPosition d pos radius =
+  (^+^) topLeftOfSlice . fromTup <$> GM.keys visibilityMap
   where
-    topLeftOfSlice = pos ^-^ V2 (div dist 2) (div dist 2)
-    slice = tileSlice topLeftOfSlice dist dist (dungeonTiles d)
-    blockedMap = GM.filter blocksLOS slice $> Blocked
-    visibilityMap = raycastFOV blockedMap pos dist
+    sliceSize = radius * 2
+    sliceOffset = V2 (div sliceSize 2) (div sliceSize 2)
+    topLeftOfSlice = pos ^-^ sliceOffset
+    slice = tileSlice topLeftOfSlice sliceSize sliceSize (dungeonTiles d)
+    blockedMap = posMap (const Blocked) $ GM.filter blocksLOS slice
+    visibilityMap = raycastFOV blockedMap sliceOffset radius
 
 tilesVisibleToCreature :: Dungeon -> UUID -> Int -> [DungeonPosition]
-tilesVisibleToCreature d uuid dist = case getCreaturePosition d uuid of
-  Just position -> tilesVisibleFromPosition d position dist
+tilesVisibleToCreature d uuid radius = case getCreaturePosition d uuid of
+  Just position -> tilesVisibleFromPosition d position radius
   Nothing -> []

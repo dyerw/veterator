@@ -21,13 +21,17 @@ type Size = V2 Int
 
 data Color = Color Int Int Int Int deriving (Show)
 
+setOpacity :: Color -> Double -> Color
+setOpacity (Color r g b _) o = Color r g b (round (o * 255))
+
 black :: Color
-black = Color 0 0 255 255
+black = Color 0 0 0 255
 
 data View
   = Group [View]
   | Translate Px View
   | Sprite ImageKey
+  | SheetSprite Int Int SpriteSheet
   | Label TextAlignment Text
   | Rect Size Color
   | -- These are all absolute to the screen and reset the translation context
@@ -36,8 +40,11 @@ data View
   | From Side Int View
   deriving (Show)
 
+data SpriteSheet = SpriteSheet Int Int ImageKey deriving (Show)
+
 data Primitive
   = SpritePrim ImageKey
+  | SheetSpritePrim Int Int SpriteSheet
   | TextPrim TextAlignment Text
   | RectPrim Size Color
   deriving (Show)
@@ -54,6 +61,7 @@ layout view Camera {cameraTranslation, cameraSize = (V2 cameraWidth cameraHeight
       Group vs -> (layout' offset [] =<< vs) <> acc
       Translate translate v -> layout' (offset + translate) acc v
       Sprite imgKey -> (offset, SpritePrim imgKey) : acc
+      SheetSprite x y ss -> (offset, SheetSpritePrim x y ss) : acc
       Label a t -> (offset, TextPrim a t) : acc
       Rect s c -> (offset, RectPrim s c) : acc
       -- These reset the offset of the affected coordinate

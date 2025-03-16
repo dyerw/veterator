@@ -11,6 +11,7 @@ import Control.Monad.Identity (Identity (runIdentity))
 import Control.Monad.Random.Lazy (MonadRandom (..), MonadTrans (lift), Rand, runRandT)
 import Control.Monad.Writer (MonadWriter (..), WriterT (runWriterT))
 import Data.Maybe (fromJust, fromMaybe, isJust)
+import qualified Data.Set as Set
 import Data.UUID (UUID)
 import Gen.Dungeon
   ( DungeonGeneration
@@ -44,8 +45,8 @@ import Veterator.Model.Dungeon
 
 data GameState = GameState
   { stateDungeon :: Dungeon,
-    stateVisibleTiles :: [V2 Int],
-    stateExploredTiles :: [V2 Int],
+    stateVisibleTiles :: Set.Set (V2 Int),
+    stateExploredTiles :: Set.Set (V2 Int),
     statePlayerUUID :: UUID,
     statePlayerXP :: Int
   }
@@ -140,7 +141,16 @@ cleanup state = do
   nextTiles <- GameM $ lift $ fillNeighboringChunks tiles chunkPos
   let nextDungeon' = nextDungeon {dungeonTiles = nextTiles}
 
-  pure $ state {stateDungeon = nextDungeon'}
+  -- Update FOV and explored
+  let nextVisibleTiles = Set.fromList $ tilesVisibleToCreature nextDungeon' (statePlayerUUID state) 10
+  let nextExploredTiles = Set.union nextVisibleTiles (stateExploredTiles state)
+
+  pure $
+    state
+      { stateDungeon = nextDungeon',
+        stateVisibleTiles = nextVisibleTiles,
+        stateExploredTiles = nextExploredTiles
+      }
 
 gainXP :: Int -> GameState -> GameM d GameState
 gainXP amount state = do
@@ -181,4 +191,4 @@ initialGameState
             dungeonCreatures = generationCreatures,
             dungeonItems = generationItems
           }
-      visibleTiles = tilesVisibleToCreature dungeon generationPlayerUUID 10
+      visibleTiles = Set.fromList $ tilesVisibleToCreature dungeon generationPlayerUUID 10

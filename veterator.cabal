@@ -29,7 +29,6 @@ library
         Math.Geometry.Extra.GridMap,
     other-modules:
         Data.IdentityList,
-        Data.IntervalSet,
         Data.Extra.List,
         Data.Extra.Maybe,
         Data.Extra.Tuple,

@@ -1,7 +1,7 @@
 module Display where
 
 import Control.Monad (forM_)
-import Display.View (AbsoluteView, Color (Color), Primitive (..), Px, TextAlignment (..))
+import Display.View (AbsoluteView, Color (Color), Primitive (..), Px, SpriteSheet (..), TextAlignment (..))
 import Foreign.C (CInt (..))
 import Linear (V2 (V2), V4 (V4))
 import Linear.Affine (Point (P))
@@ -60,7 +60,17 @@ renderPrimitive res renderer (V2 x y, prim) = case prim of
         Nothing -- entire Texture
         (Just $ renderRect x y (16 :: Int) (16 :: Int))
     pure ()
+  SheetSpritePrim sheetX sheetY (SpriteSheet tileWidth tileHeight imgKey) -> do
+    let texture = imageTexture (getImage imgKey res)
+    _ <-
+      SDL.copy
+        renderer
+        texture
+        (Just $ renderRect (sheetX * tileWidth) (sheetY * tileHeight) tileWidth tileHeight)
+        (Just $ renderRect x y tileWidth tileHeight)
+    pure ()
   RectPrim (V2 width height) (Color r g b a) -> do
+    SDL.rendererDrawBlendMode renderer $= SDL.BlendAlphaBlend
     SDL.rendererDrawColor renderer $= V4 (fi r) (fi g) (fi b) (fi a)
     _ <-
       SDL.fillRect

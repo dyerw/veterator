@@ -131,3 +131,9 @@ gridSF :: (Ord k) => Int -> Int -> (a -> k) -> SF a View -> SF [(V2 Int, a)] Vie
 gridSF w h keyFn viewSF = proc as -> do
   vs <- keyPar (keyFn . snd) (second viewSF) -< as
   returnA -< sparseGridLayout w h vs
+
+-- Stationary views can be keyed on their position
+stationaryGridSF :: Int -> Int -> SF a View -> SF [(V2 Int, a)] View
+stationaryGridSF w h viewSF = proc as -> do
+  vs <- keyPar fst (second viewSF) -< as
+  returnA -< sparseGridLayout w h vs

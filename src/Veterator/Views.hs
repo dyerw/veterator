@@ -7,7 +7,7 @@ module Veterator.Views where
 
 import Control.Arrow (Arrow (arr), returnA, (>>>))
 import qualified Data.Bifunctor as Bi
-import Data.Extra.Tuple (mapSnd)
+import Data.Extra.Tuple (mapSnd, toSnd)
 import Data.Maybe (mapMaybe)
 import qualified Data.Set as Set
 import Data.Text (pack)
@@ -22,9 +22,10 @@ import Display.View
     gridSF,
     setOpacity,
     sparseGridLayout,
+    stationaryGridSF,
   )
 import FRP (andDespawnAfterSecs, spawning)
-import FRP.Yampa (SF, constant, time)
+import FRP.Yampa (SF, Time, after, constant, edgeBy, rSwitch, switch, time)
 import GameState (GameState (..), getPlayerPosition)
 import Linear (V2 (V2))
 import Math.Geometry.GridMap (GridMap (..))
@@ -67,7 +68,7 @@ worldView = proc (state, events) -> do
   cv <- creaturesView -< (state, events)
   rts <- arr renderedTiles -< state
   let tv = tilesView rts
-  fow <- fogOfWarView -< (rts, state)
+  fow <- fogOfWarView -< (fst <$> rts, state)
   returnA -< Group [tv, cv, fow]
 
 creaturesView :: SF (GameState, [GameEvent d]) View
@@ -77,29 +78,58 @@ creaturesView = proc (state, events) -> do
   view <- gridSF tileSize tileSize (creatureId . fst) creatureView -< creatures
   returnA -< view
 
-fogOfWarView :: SF ([(DungeonPosition, Tile)], GameState) View
-fogOfWarView =
-  arr
-    ( \(tiles, state) ->
-        let renderedTileSet = Set.fromList $ fst <$> tiles
-            unexploredTiles = Set.toList $ Set.difference renderedTileSet (stateExploredTiles state)
-            outOfSightExploredTiles =
-              Set.intersection
-                renderedTileSet
-                $ Set.difference (stateExploredTiles state) (stateVisibleTiles state)
-            unexploredView = sparseGridLayout tileSize tileSize $ (,tileRect black) <$> unexploredTiles
-            outOfSightExploredView =
-              sparseGridLayout tileSize tileSize $
-                (,tileRect (setOpacity black 0.5))
-                  <$> Set.toList outOfSightExploredTiles
-         in Group [unexploredView, outOfSightExploredView]
-    )
+fogOfWarView :: SF ([DungeonPosition], GameState) View
+fogOfWarView = proc (tiles, state) -> do
+  let exploredTiles = (stateExploredTiles state)
+  let visibleTiles = (stateVisibleTiles state)
+  let toFOW t =
+        if Set.member t exploredTiles
+          then
+            if Set.member t visibleTiles then Revealed else Discovered
+          else Hidden
+  let fowTiles = toSnd toFOW <$> tiles
+  view <- stationaryGridSF tileSize tileSize fowTileView -< fowTiles
+  returnA -< view
+
+data FOW = Revealed | Discovered | Hidden
+
+fowTileView :: SF FOW View
+fowTileView = proc fow -> do
+  let opacity = case fow of
+        Revealed -> 0.0
+        Discovered -> 0.5
+        Hidden -> 1.0
+  interpolatedOpacity <- interpolating 0.3 1.0 -< opacity
+  returnA -< tileRect (setOpacity black interpolatedOpacity)
 
 tileRect :: Color -> View
 tileRect = Rect (V2 tileSize tileSize)
 
 tilesView :: [(DungeonPosition, Tile)] -> View
 tilesView tiles = sparseGridLayout tileSize tileSize (mapSnd tileView <$> tiles)
+
+-- A signal function that when the input changes interpolates
+-- to the new value instead of immediately returning it
+interpolating :: Time -> Double -> SF Double Double
+interpolating duration initial =
+  edgeBy nextInterpolation initial >>> proc next -> do
+    v <- rSwitch (constant initial) -< ((), next)
+    returnA -< v
+  where
+    nextInterpolation :: Double -> Double -> Maybe (SF () Double)
+    nextInterpolation prev curr | curr /= prev = Just $ interpolateTo duration prev curr
+    nextInterpolation _ _ = Nothing
+
+interpolateTo :: Time -> Double -> Double -> SF () Double
+interpolateTo duration from to =
+  switch
+    ( proc () -> do
+        t <- time -< ()
+        e <- after duration () -< ()
+        let v = from + ((to - from) * (t / duration))
+        returnA -< (v, e)
+    )
+    $ const (constant to)
 
 animate :: Double -> Double -> SF View View
 animate dx dy = proc view -> do

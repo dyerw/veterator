@@ -46,6 +46,8 @@ library
         Veterator.Direction,
         Veterator.Model.Dungeon,
         Veterator.Model.Creature,
+        Veterator.Model.Item,
+        Veterator.ProcGen.Item,
         Veterator.Views,
         Veterator.Events,
         Debug.Extra

@@ -34,7 +34,6 @@ library
         Data.Extra.Tuple,
         Display,
         Display.View,
-        Display.Component,
         Input,
         Time,
         FRP,
